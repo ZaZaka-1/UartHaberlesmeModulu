@@ -1,10 +1,7 @@
-QT       += core gui
+HEADERS += \
+    main.h
 
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+SOURCES += \
+    main.cpp
 
-TARGET = iki_label_demo
-TEMPLATE = app
-
-SOURCES += main.cpp
-
-HEADERS += main.h
+QT += core gui widgets

@@ -1,9 +1,10 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#include <QApplication>
-#include <QWidget>
-#include <QLabel>
-#include <QGridLayout>
+class main
+{
+public:
+    main();
+};
 
 #endif // MAIN_H
