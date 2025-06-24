@@ -3,6 +3,7 @@
 #include <QLabel>
 #include <QGridLayout>
 #include <QTimer>
+#include <QSerialPort>
 
 int main(int argc, char *argv[])
 {

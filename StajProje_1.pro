@@ -4,4 +4,4 @@ HEADERS += \
 SOURCES += \
     main.cpp
 
-QT += core gui widgets
+QT += core gui widgets serialport
