@@ -1,7 +1,9 @@
-HEADERS += \
-    main.h
+QT += core gui widgets serialport
 
-SOURCES += \
-    main.cpp
+TEMPLATE = app
+TARGET = uart_simple
 
-QT += core gui widgets
+SOURCES += main.cpp \
+           mainwindow.cpp
+
+HEADERS += mainwindow.h
