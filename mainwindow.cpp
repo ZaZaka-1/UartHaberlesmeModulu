@@ -9,8 +9,8 @@ MainWindow::MainWindow(QWidget *parent)
     protocolSwitched(false)
 {
     // Seri port ayarları
-    serial->setPortName("COM4");  // Cihaza göre değiştir
-    serial->setBaudRate(375000);
+    serial->setPortName("COM5");  // Cihaza göre değiştir
+    serial->setBaudRate(350000);
     serial->setDataBits(QSerialPort::Data8);
     serial->setParity(QSerialPort::OddParity);
     serial->setStopBits(QSerialPort::OneStop);
