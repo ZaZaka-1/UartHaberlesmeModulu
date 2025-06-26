@@ -9,8 +9,8 @@ MainWindow::MainWindow(QWidget *parent)
     protocolSwitched(false)
 {
     // Seri port ayarları
-    serial->setPortName("COM5");  // Cihaza göre değiştir
-    serial->setBaudRate(350000);
+    serial->setPortName("COM4");  // Cihaza göre değiştir
+    serial->setBaudRate(375000);
     serial->setDataBits(QSerialPort::Data8);
     serial->setParity(QSerialPort::OddParity);
     serial->setStopBits(QSerialPort::OneStop);
@@ -23,13 +23,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(&keepAliveTimer, &QTimer::timeout, this, &MainWindow::sendKeepAlive);
 
-    // Keep-alive zamanlayıcısını başlat
-    keepAliveTimer.start(100); // 5 saniyede bir keep-alive gönder
+    keepAliveTimer.start(100);
 }
 
 MainWindow::~MainWindow()
 {
-    closeSerialPort(); // Portu kapat
+    closeSerialPort();
 }
 
 void MainWindow::openSerialPort()
@@ -49,19 +48,12 @@ void MainWindow::openSerialPort()
         qDebug() << "Seri port başarıyla açıldı.";
     }
 
-    // Host'tan SMM'ye veri gönderimi
     QByteArray commands;
     commands.append(0xBF);
     commands.append(0x5F);
     commands.append(0xFF);
 
-    // Verileri gönder
     serial->write(commands);
-    /* if (!serial->waitForBytesWritten(100)) {
-        qDebug() << "Veri yazma hatası:" << serial->errorString();
-    } else {
-        qDebug() << "Veri başarıyla gönderildi:" << commands.toHex();
-    }*/
 }
 
 void MainWindow::closeSerialPort()
@@ -74,52 +66,48 @@ void MainWindow::closeSerialPort()
 
 void MainWindow::readSerialData()
 {
-    //buffer.append();
-    qDebug()<<serial->readAll().toHex();
-    return;
+    QByteArray data = serial->readAll();
+    buffer.append(data);
 
+    // Burada buffer’da toplanan veriyi işle
+    processBuffer();
+}
+
+void MainWindow::processBuffer()
+{
+    // Örnek: Elindeki çok uzun hex string yerine, seri porttan gelen ham veriyi buffer’da tutup ayrıştırıyoruz
     while (buffer.size() >= 5) {
-        int start = buffer.indexOf(QByteArray::fromHex("AA55"));
+        int start = buffer.indexOf(QByteArray::fromHex("aa55"));
         if (start == -1) {
             buffer.clear();
-            return; // Başlangıç baytı bulunamazsa buffer'ı temizle
+            return; // Başlangıç bulunmazsa temizle
         }
 
         if (start > 0)
-            buffer.remove(0, start); // Başlangıç baytından önceki verileri temizle
+            buffer.remove(0, start);
 
         if (buffer.size() < 5)
-            return; // Paket tamamlanmamışsa çık
+            return; // Paket tamamlanmamış
 
-        quint8 length = static_cast<quint8>(buffer[2]);
+        quint8 length = static_cast<quint8>(buffer[2]); // Paket uzunluğunu protokole göre ayarla
+
         if (buffer.size() < length + 4)
-            return; // Paket tamamlanmamışsa çık
+            return; // Paket tamamlanmamış
 
         QByteArray packet = buffer.left(length + 4);
-        buffer.remove(0, length + 4); // Kullanılan veriyi buffer'dan çıkar
+        buffer.remove(0, length + 4);
 
         quint8 receivedChecksum = static_cast<quint8>(packet[length + 3]);
         quint8 calculatedChecksum = calculateChecksum(packet.mid(2, length + 1));
+
         if (receivedChecksum != calculatedChecksum) {
-            qDebug() << "Checksum hatası!";
+            qDebug() << "Checksum hatası paket:" << packet.toHex();
             continue; // Hatalı paketi atla
         }
 
-        quint8 code = static_cast<quint8>(packet[3]);
-        QByteArray payload = packet.mid(4, length - 1);
+        qDebug() << "Geçerli paket:" << packet.toHex();
 
-        if (code == 8 || code == 9) {
-            if (payload.size() < 3) continue;
-
-            int spo2 = static_cast<quint8>(payload[0]);
-            int pulse = static_cast<quint8>(payload[1]);
-            int strength = static_cast<quint8>(payload[2]);
-
-            bool weakSignal = (strength < 30);
-            qDebug() << "SpO2:" << spo2 << "% | Pulse:" << pulse
-                     << "| Strength:" << strength
-                     << (weakSignal ? "(Sinyal zayıf)" : "");
-        }
+        // Burada paketi istediğin gibi işleyebilirsin, örn. payload ayrıştırma vs.
     }
 }
 
@@ -143,22 +131,8 @@ void MainWindow::handleError(QSerialPort::SerialPortError error)
 void MainWindow::sendKeepAlive()
 {
     QByteArray commands;
-    commands.append(0xBF);
     commands.append(0x5F);
+    commands.append(0xBF);
     commands.append(0xFF);
     serial->write(commands);
-
-    // if (!protocolSwitched || !serial->isOpen())
-    return;
-
-    QByteArray keepAlive;
-    keepAlive.append('\xAA');
-    keepAlive.append('\x55');
-    keepAlive.append('\x01');
-    keepAlive.append('\x0D'); // Keep-alive komutu
-    quint8 checksum = calculateChecksum(keepAlive.mid(2));
-    keepAlive.append(static_cast<char>(checksum));
-
-    serial->write(keepAlive);
-    qDebug() << "Keep-alive paketi gönderildi.";
 }

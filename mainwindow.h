@@ -19,14 +19,15 @@ private slots:
     void sendKeepAlive();
 
 private:
-    void openSerialPort();
-    void closeSerialPort();
-    quint8 calculateChecksum(const QByteArray &data);
-
     QSerialPort *serial;
-    QByteArray buffer;          // Gelen veriyi depolamak için buffer
     QTimer keepAliveTimer;
     bool protocolSwitched;
+    QByteArray buffer;
+
+    void openSerialPort();
+    void closeSerialPort();
+    void processBuffer();
+    quint8 calculateChecksum(const QByteArray &data);
 };
 
 #endif // MAINWINDOW_H
