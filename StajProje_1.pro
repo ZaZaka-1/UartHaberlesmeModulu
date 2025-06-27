@@ -1,9 +1,25 @@
-QT += core gui widgets serialport
+QT       += core gui widgets serialport quick qml quickcontrols2
+
+CONFIG   += c++17
+CONFIG   += qmltypes
+CONFIG   += qtquickcompiler
 
 TEMPLATE = app
-TARGET = uart_simple
+TARGET = StajProje_1
 
-SOURCES += main.cpp \
-           mainwindow.cpp
+QML_IMPORT_NAME = StajProje1
+QML_IMPORT_MAJOR_VERSION = 1
 
-HEADERS += mainwindow.h
+SOURCES += \
+    main.cpp \
+    mainwindow.cpp
+
+HEADERS += \
+    mainwindow.h
+
+RESOURCES += \
+    Resource.qrc
+
+DISTFILES += \
+    main.qml
+
