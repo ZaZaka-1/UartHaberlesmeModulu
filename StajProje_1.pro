@@ -1,14 +1,24 @@
-QT       += core gui serialport
+QT       += core gui widgets serialport quick qml quickcontrols2
 
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+CONFIG   += c++17
+CONFIG   += qmltypes
+CONFIG   += qtquickcompiler
 
-TARGET = example
 TEMPLATE = app
+TARGET = StajProje_1
 
-SOURCES += main.cpp \
-           mainwindow.cpp
+QML_IMPORT_NAME = StajProje1
+QML_IMPORT_MAJOR_VERSION = 1
 
-HEADERS += mainwindow.h
+SOURCES += \
+    main.cpp \
+    mainwindow.cpp
 
-# Eğer Qt versiyonuna göre fark varsa, aşağıdaki gibi ekleyebilirsin
-# CONFIG += c++11
+HEADERS += \
+    mainwindow.h
+
+RESOURCES += \
+    Resource.qrc
+
+DISTFILES += \
+    main.qml

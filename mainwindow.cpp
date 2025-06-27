@@ -1,122 +1,230 @@
 #include "mainwindow.h"
 #include <QDebug>
-#include <QSerialPortInfo>
-#include <QThread>
 
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent),
+MainWindow::MainWindow(QObject *parent)
+    : QObject(parent),
     serial(new QSerialPort(this)),
-    protocolSwitched(false)
+    m_spo2(""),
+    m_pulse(""),
+    connectionSent(false),
+    currentPacketIndex(0)
 {
-    // Seri port ayarları
-    serial->setPortName("COM4");  // Cihaza göre değiştir
+    serial->setPortName("COM4");
     serial->setBaudRate(375000);
     serial->setDataBits(QSerialPort::Data8);
     serial->setParity(QSerialPort::OddParity);
     serial->setStopBits(QSerialPort::OneStop);
     serial->setFlowControl(QSerialPort::NoFlowControl);
 
-    connect(serial, &QSerialPort::readyRead, this, &MainWindow::readSerialData);
+    connect(serial, &QSerialPort::readyRead, this, &MainWindow::readData);
     connect(serial, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
 
     openSerialPort();
 
-    connect(&keepAliveTimer, &QTimer::timeout, this, &MainWindow::sendKeepAlive);
+    connectionTimer = new QTimer(this);
+    dataRequestTimer = new QTimer(this);
+    sequentialTimer = new QTimer(this);
 
-    keepAliveTimer.start(100);
-}
+    connectionTimer->setSingleShot(true);
+    dataRequestTimer->setSingleShot(false);
+    sequentialTimer->setSingleShot(true);
 
-MainWindow::~MainWindow()
-{
-    closeSerialPort();
+    connect(connectionTimer, &QTimer::timeout, this, &MainWindow::sendConnectionSequence);
+    connect(dataRequestTimer, &QTimer::timeout, this, &MainWindow::startSequentialRequests);
+    connect(sequentialTimer, &QTimer::timeout, this, &MainWindow::sendNextPacket);
+
+    packetCommands = createIndividualCommands();
+
+    connectionTimer->start(1000);
 }
 
 void MainWindow::openSerialPort()
 {
-    qDebug() << "Available ports:";
-    const auto ports = QSerialPortInfo::availablePorts();
-    for (const QSerialPortInfo &info : ports) {
-        qDebug() << "Port:" << info.portName()
-        << "| Description:" << info.description()
-        << "| Manufacturer:" << info.manufacturer();
-    }
-
     if (!serial->open(QIODevice::ReadWrite)) {
-        qDebug() << "Seri port açılamadı:" << serial->errorString();
-        return;
+        qWarning() << "Seri port açılamadı:" << serial->errorString();
     } else {
-        qDebug() << "Seri port başarıyla açıldı.";
-    }
-
-    QByteArray commands;
-    commands.append(0xBF);
-    commands.append(0x5F);
-    commands.append(0xFF);
-
-    serial->write(commands);
-}
-
-void MainWindow::closeSerialPort()
-{
-    if (serial->isOpen()) {
-        serial->close();
-        qDebug() << "Seri port kapatıldı.";
+        qDebug() << "Seri port açıldı.";
     }
 }
 
-void MainWindow::readSerialData()
+void MainWindow::sendConnectionSequence()
 {
-    QByteArray data = serial->readAll();
-    buffer.append(data);
+    if (connectionSent || !serial->isOpen())
+        return;
 
-    // Burada buffer’da toplanan veriyi işle
-    processBuffer();
+    QByteArray handshake = QByteArray::fromHex("BF5FFF");
+    serial->write(handshake);
+    serial->flush();
+    serial->waitForBytesWritten(1000);
+
+    connectionSent = true;
+    connectionTimer->stop();
+
+    QTimer::singleShot(2000, this, [this]() {
+        dataRequestTimer->start(5000);
+    });
 }
 
-void MainWindow::processBuffer()
+void MainWindow::startSequentialRequests()
 {
-    // Örnek: Elindeki çok uzun hex string yerine, seri porttan gelen ham veriyi buffer’da tutup ayrıştırıyoruz
-    while (buffer.size() >= 5) {
-        int start = buffer.indexOf(QByteArray::fromHex("aa55"));
-        if (start == -1) {
+    if (!serial->isOpen())
+        return;
+
+    currentPacketIndex = 0;
+    sendNextPacket();
+}
+
+void MainWindow::sendNextPacket()
+{
+    if (!serial->isOpen() || currentPacketIndex >= packetCommands.size())
+        return;
+
+    QByteArray packet = packetCommands[currentPacketIndex];
+    serial->write(packet);
+    serial->flush();
+    serial->waitForBytesWritten(100);
+
+    currentPacketIndex++;
+    if (currentPacketIndex < packetCommands.size()) {
+        sequentialTimer->start(1000);
+    }
+}
+
+QList<QByteArray> MainWindow::createIndividualCommands()
+{
+    QList<QByteArray> commands;
+    commands.append(createSMMPacket(0x01, QByteArray::fromHex("101102000000000803010F")));
+    commands.append(createSMMPacket(0x02, QByteArray()));
+    commands.append(createSMMPacket(0x04, QByteArray::fromHex("0100")));
+    return commands;
+}
+
+QByteArray MainWindow::createSMMPacket(uint8_t code, const QByteArray &data)
+{
+    QByteArray packet;
+    packet.append(0xAA);
+    packet.append(0x55);
+    uint8_t length = data.size() + 1;
+    packet.append(length);
+    packet.append(code);
+    packet.append(data);
+
+    uint8_t checksum = length + code;
+    for (char byte : data) {
+        checksum += static_cast<uint8_t>(byte);
+    }
+    packet.append(checksum);
+    return packet;
+}
+
+void MainWindow::readData()
+{
+    QByteArray incoming = serial->readAll();
+    if (incoming.isEmpty()) return;
+
+    buffer.append(incoming);
+    parseBufferedData();
+}
+
+MainWindow::~MainWindow()
+{
+    // Eğer özel bir temizlik işlemi yapmayacaksanız, boş bırakabilirsiniz.
+}
+
+void MainWindow::parseBufferedData()
+{
+    while (buffer.size() >= 4) {
+        int headerIndex = buffer.indexOf(QByteArray::fromHex("AA55"));
+        if (headerIndex == -1) {
             buffer.clear();
-            return; // Başlangıç bulunmazsa temizle
+            return;
         }
 
-        if (start > 0)
-            buffer.remove(0, start);
+        if (headerIndex > 0)
+            buffer.remove(0, headerIndex);
 
-        if (buffer.size() < 5)
-            return; // Paket tamamlanmamış
+        if (buffer.size() < 4)
+            return;
 
-        quint8 length = static_cast<quint8>(buffer[2]); // Paket uzunluğunu protokole göre ayarla
+        uint8_t length = static_cast<uint8_t>(buffer[2]);
+        int totalSize = 3 + length + 1;
 
-        if (buffer.size() < length + 4)
-            return; // Paket tamamlanmamış
+        if (buffer.size() < totalSize)
+            return;
 
-        QByteArray packet = buffer.left(length + 4);
-        buffer.remove(0, length + 4);
+        QByteArray packet = buffer.left(totalSize);
+        uint8_t code = static_cast<uint8_t>(packet[3]);
+        QByteArray payload = packet.mid(4, length - 1);
 
-        quint8 receivedChecksum = static_cast<quint8>(packet[length + 3]);
-        quint8 calculatedChecksum = calculateChecksum(packet.mid(2, length + 1));
-
-        if (receivedChecksum != calculatedChecksum) {
-            qDebug() << "Checksum hatası paket:" << packet.toHex();
-            continue; // Hatalı paketi atla
+        uint8_t receivedChecksum = static_cast<uint8_t>(packet[totalSize - 1]);
+        uint8_t calculatedChecksum = length + code;
+        for (char byte : payload) {
+            calculatedChecksum += static_cast<uint8_t>(byte);
         }
 
-        qDebug() << "Geçerli paket:" << packet.toHex();
+        if (receivedChecksum == calculatedChecksum) {
+            parsePacketByCode(code, payload);
+        } else {
+            qWarning() << "Checksum hatası:" << packet.toHex(' ').toUpper();
+        }
 
-        // Burada paketi istediğin gibi işleyebilirsin, örn. payload ayrıştırma vs.
+        buffer.remove(0, totalSize);
     }
 }
 
-quint8 MainWindow::calculateChecksum(const QByteArray &data)
+void MainWindow::parsePacketByCode(uint8_t code, const QByteArray &payload)
 {
-    quint8 sum = 0;
-    for (auto c : data)
-        sum += static_cast<quint8>(c);
-    return sum;
+    QString hexDump;
+    for (uint8_t byte : payload) {
+        hexDump += QString("%1 ").arg(byte, 2, 16, QLatin1Char('0')).toUpper();
+    }
+    qDebug().noquote() << QString(" Code: 0x%1 Payload: %2").arg(code, 2, 16, QLatin1Char('0')).toUpper().arg(hexDump.trimmed());
+
+    switch (code) {
+    case 0x04: {  // ERT Parameters (isteğe bağlı log)
+        if (payload.size() >= 6) {
+            uint8_t rr = static_cast<uint8_t>(payload[0]);
+            uint8_t hr = static_cast<uint8_t>(payload[1]);
+            uint16_t rawT1 = (static_cast<uint8_t>(payload[2]) << 8) | static_cast<uint8_t>(payload[3]);
+            uint16_t rawT2 = (static_cast<uint8_t>(payload[4]) << 8) | static_cast<uint8_t>(payload[5]);
+
+            float t1 = rawT1 < 5000 ? rawT1 / 10.0 : 0.0;
+            float t2 = rawT2 < 5000 ? rawT2 / 10.0 : 0.0;
+
+            qDebug().noquote() << QString(" ERT (Code 0x04) ➤ HR: %1 bpm | RR: %2 rpm | T1: %3 °C | T2: %4 °C")
+                                      .arg(hr)
+                                      .arg(rr)
+                                      .arg(t1, 0, 'f', 1)
+                                      .arg(t2, 0, 'f', 1);
+        }
+        break;
+    }
+    case 0x15: {  // Biolight SPO2 verileri
+        if (payload.size() >= 6) {
+            uint8_t spo2 = static_cast<uint8_t>(payload[3]);
+            uint16_t pulse = (static_cast<uint8_t>(payload[4]) << 8) | static_cast<uint8_t>(payload[5]);
+
+            QString spo2Str = (spo2 == 0x7F || spo2 > 100) ? "Geçersiz" : QString::number(spo2);
+            QString pulseStr = (pulse > 240 || pulse == 0 || pulse == 0xFFFF) ? "Geçersiz" : QString::number(pulse);
+
+            if (spo2Str != m_spo2) {
+                m_spo2 = spo2Str;
+                emit spo2Changed();
+            }
+            if (pulseStr != m_pulse) {
+                m_pulse = pulseStr;
+                emit pulseChanged();
+            }
+
+            qDebug().noquote() << QString(" SPO2 (0x15) ➤ SpO2: %1 %% | Pulse: %2 bpm")
+                                      .arg(spo2Str)
+                                      .arg(pulseStr);
+        }
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 void MainWindow::handleError(QSerialPort::SerialPortError error)
@@ -124,15 +232,10 @@ void MainWindow::handleError(QSerialPort::SerialPortError error)
     if (error == QSerialPort::NoError)
         return;
 
-    qDebug() << "Seri port hatası:" << serial->errorString();
-    closeSerialPort();
-}
+    qWarning() << "️ Serial Port Hatası:" << error << "-" << serial->errorString();
 
-void MainWindow::sendKeepAlive()
-{
-    QByteArray commands;
-    commands.append(0x5F);
-    commands.append(0xBF);
-    commands.append(0xFF);
-    serial->write(commands);
+    if (error == QSerialPort::ResourceError || error == QSerialPort::DeviceNotFoundError) {
+        connectionSent = false;
+        connectionTimer->start(2000);
+    }
 }
