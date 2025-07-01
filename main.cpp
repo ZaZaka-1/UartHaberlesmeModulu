@@ -8,14 +8,14 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
 
     app.setApplicationName("StajProje_1");
-    app.setOrganizationName("YourOrganization"); // İsteğe bağlı
+    app.setOrganizationName("YourOrganization");
 
     MainWindow backend;
 
     QQmlApplicationEngine engine;
 
-    // Backend nesnesini QML'e "backend" adıyla bağla
-    engine.rootContext()->setContextProperty("backend", &backend);
+    // Backend nesnesini QML'e "mainWindow" adıyla bağla (QML'deki kullanımla uyumlu)
+    engine.rootContext()->setContextProperty("mainWindow", &backend);
 
     // QML dosyasını yükle
     const QUrl url(QStringLiteral("qrc:/main.qml"));

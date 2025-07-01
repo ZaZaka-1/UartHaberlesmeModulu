@@ -2,181 +2,292 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 
 ApplicationWindow {
+    id: root
     visible: true
     width: 480
-    height: 600
-    title: qsTr("SPO2 Vital Takip")
-    color: "#0f1419"  // Koyu medikal tema
+    height: 700
+    title: qsTr("Advanced SPO2 Monitor")
+    color: "#0a0e14"
+
+    // C++ backend'den gelen veriler - mainWindow objesi üzerinden erişim
+    // Bu kısım, uygulamanın C++ backend'i ile nasıl entegre olduğunu gösterir.
+    // Gerçek bir uygulamada 'mainWindow' objesi C++ tarafından QML'e expose edilmelidir.
+    property string spo2Value: mainWindow ? mainWindow.spo2 : "Geçersiz"
+    property string pulseValue: mainWindow ? mainWindow.pulse : "Geçersiz"
+
+    // Backend sinyallerini dinle
+    // C++'tan gelen spo2Changed ve pulseChanged sinyallerini yakalar
+    Connections {
+        target: mainWindow
+        function onSpo2Changed() {
+            root.spo2Value = mainWindow.spo2
+        }
+        function onPulseChanged() {
+            root.pulseValue = mainWindow.pulse
+        }
+    }
+
+    // Numerik değerler için helper propertyler
+    // String değerleri sayısal formata dönüştürür ve geçersiz durumları yönetir.
+    property int spo2Numeric: {
+        if (spo2Value === "Geçersiz" || spo2Value === "") return 0
+        var val = parseInt(spo2Value)
+        return isNaN(val) ? 0 : val
+    }
+
+    property int pulseNumeric: {
+        if (pulseValue === "Geçersiz" || pulseValue === "") return 0
+        var val = parseInt(pulseValue)
+        return isNaN(val) ? 0 : val
+    }
 
     // Ana içerik kutusu
     Rectangle {
         anchors.fill: parent
-        anchors.margins: 20
-        radius: 8
-        color: "#1a1f29"
-        border.color: "#2d3748"
-        border.width: 1
+        anchors.margins: 15
+        radius: 10
+        color: "#161b22" // Koyu gri arka plan
+        border.color: "#30363d" // Koyu gri kenarlık
+        border.width: 2
 
         Column {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 15
+            anchors.margins: 15
+            spacing: 12
 
-            // Başlık ve durum çubuğu
+            // Gelişmiş başlık
             Rectangle {
                 width: parent.width
-                height: 50
-                color: "#2d3748"
-                radius: 6
-                border.color: "#4a5568"
+                height: 55
+                color: "#21262d" // Koyu mavi-gri başlık arka planı
+                radius: 8
+                border.color: "#30363d"
                 border.width: 1
 
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.leftMargin: 15
-                    spacing: 10
+                    spacing: 12
+
+                    Rectangle {
+                        width: 6
+                        height: 30
+                        color: "#238636" // Yeşil vurgu çubuğu
+                        radius: 3
+                    }
 
                     Text {
-                        text: qsTr("PATIENT MONITOR")
-                        font.family: "Consolas, monospace"
-                        font.pointSize: 11
+                        text: qsTr("PULSE OXIMETRY MONITOR")
+                        font.family: "Consolas, monospace" // Monospace font
+                        font.pointSize: 12
                         font.bold: true
-                        color: "#00ff88"
+                        color: "#58a6ff" // Açık mavi metin
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
+                    // Sinyal durumu göstergesi (yanıp sönen nokta)
                     Rectangle {
-                        width: 8
-                        height: 8
-                        radius: 4
-                        color: "#00ff88"
+                        width: 10
+                        height: 10
+                        radius: 5
+                        color: root.spo2Value !== "Geçersiz" && root.spo2Value !== "" ? "#238636" : "#656d76" // Yeşil veya gri
                         anchors.verticalCenter: parent.verticalCenter
 
                         SequentialAnimation on opacity {
                             loops: Animation.Infinite
-                            running: true
-                            PropertyAnimation { from: 1.0; to: 0.3; duration: 800 }
-                            PropertyAnimation { from: 0.3; to: 1.0; duration: 800 }
+                            running: root.spo2Value !== "Geçersiz" && root.spo2Value !== "" // Sinyal varsa yanıp söner
+                            PropertyAnimation { from: 1.0; to: 0.2; duration: 1000 }
+                            PropertyAnimation { from: 0.2; to: 1.0; duration: 1000 }
                         }
                     }
                 }
 
-                Text {
+                Column {
                     anchors.right: parent.right
                     anchors.rightMargin: 15
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Qt.formatDateTime(new Date(), "hh:mm:ss")
-                    font.family: "Consolas, monospace"
-                    font.pointSize: 10
-                    color: "#a0aec0"
+                    spacing: 2
 
-                    Timer {
-                        interval: 1000
-                        running: true
-                        repeat: true
-                        onTriggered: parent.text = Qt.formatDateTime(new Date(), "hh:mm:ss")
+                    Text {
+                        id: timeText
+                        text: Qt.formatDateTime(new Date(), "hh:mm:ss") // Saat
+                        font.family: "Consolas, monospace"
+                        font.pointSize: 11
+                        color: "#7d8590" // Açık gri metin
+                        anchors.right: parent.right
+
+                        Timer {
+                            interval: 1000 // Her saniye güncellenir
+                            running: true
+                            repeat: true
+                            onTriggered: timeText.text = Qt.formatDateTime(new Date(), "hh:mm:ss")
+                        }
+                    }
+
+                    Text {
+                        text: Qt.formatDateTime(new Date(), "dd.MM.yyyy") // Tarih
+                        font.family: "Consolas, monospace"
+                        font.pointSize: 8
+                        color: "#656d76" // Koyu gri metin
+                        anchors.right: parent.right
                     }
                 }
             }
 
-            // Vital Signs Row
+            // Vital Signs Paneli (SpO2 ve Nabız)
             Row {
                 width: parent.width
-                height: 120
-                spacing: 10
+                height: 140
+                spacing: 12
 
-                // SPO2 Panel
+                // SpO2 Ana Panel
                 Rectangle {
-                    width: (parent.width - 10) / 2
+                    width: (parent.width - 12) / 2 // Genişliğin yarısı
                     height: parent.height
-                    color: "#2d3748"
-                    radius: 6
-                    border.color: "#0ea5e9"
-                    border.width: 2
-
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 8
-
-                        Text {
-                            text: qsTr("SpO2")
-                            font.family: "Consolas, monospace"
-                            font.pointSize: 11
-                            font.bold: true
-                            color: "#0ea5e9"
-                            anchors.horizontalCenter: parent.horizontalCenter
-                        }
-
-                        Text {
-                            text: backend.spo2Value + "%"
-                            font.family: "Consolas, monospace"
-                            font.pointSize: 32
-                            font.bold: true
-                            color: "#ffffff"
-                            anchors.horizontalCenter: parent.horizontalCenter
-                        }
-
-                        Text {
-                            text: qsTr("Oxygen Saturation")
-                            font.family: "Consolas, monospace"
-                            font.pointSize: 8
-                            color: "#a0aec0"
-                            anchors.horizontalCenter: parent.horizontalCenter
-                        }
+                    color: "#21262d"
+                    radius: 8
+                    border.color: { // SpO2 değerine göre kenarlık rengi
+                        if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#656d76" // Gri
+                        return root.spo2Numeric >= 95 ? "#238636" : (root.spo2Numeric >= 90 ? "#fb8500" : "#f85149") // Yeşil, turuncu, kırmızı
                     }
-                }
-
-                // Heart Rate Panel
-                Rectangle {
-                    width: (parent.width - 10) / 2
-                    height: parent.height
-                    color: "#2d3748"
-                    radius: 6
-                    border.color: "#ef4444"
                     border.width: 2
 
                     Column {
                         anchors.centerIn: parent
-                        spacing: 8
+                        spacing: 10
 
                         Text {
-                            text: qsTr("Heart Rate")
+                            text: qsTr("SpO₂")
                             font.family: "Consolas, monospace"
-                            font.pointSize: 11
+                            font.pointSize: 14
                             font.bold: true
-                            color: "#ef4444"
+                            color: "#58a6ff"
                             anchors.horizontalCenter: parent.horizontalCenter
+                        }
+
+                        Rectangle {
+                            width: 100
+                            height: 60
+                            color: "#0d1117" // Koyu arka plan
+                            radius: 6
+                            border.color: "#30363d"
+                            border.width: 1
+                            anchors.horizontalCenter: parent.horizontalCenter
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: root.spo2Value === "Geçersiz" || root.spo2Value === "" ? "--" : root.spo2Value + "%"
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 28
+                                font.bold: true
+                                color: { // SpO2 değerine göre metin rengi
+                                    if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#656d76"
+                                    return root.spo2Numeric >= 95 ? "#7ee787" : (root.spo2Numeric >= 90 ? "#ffa657" : "#ff7b72")
+                                }
+                            }
                         }
 
                         Row {
                             anchors.horizontalCenter: parent.horizontalCenter
                             spacing: 8
 
-                            Text {
-                                text: backend.pulseValue
-                                font.family: "Consolas, monospace"
-                                font.pointSize: 32
-                                font.bold: true
-                                color: "#ffffff"
+                            Rectangle {
+                                width: 8
+                                height: 8
+                                radius: 4
+                                color: { // SpO2 değerine göre nokta rengi
+                                    if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#656d76"
+                                    return root.spo2Numeric >= 95 ? "#7ee787" : (root.spo2Numeric >= 90 ? "#ffa657" : "#ff7b72")
+                                }
                             }
 
                             Text {
-                                id: heartBeat
-                                text: "♥"
+                                text: qsTr("Oxygen Saturation")
                                 font.family: "Consolas, monospace"
-                                font.pointSize: 20
-                                color: "#ef4444"
-                                anchors.verticalCenter: parent.verticalCenter
+                                font.pointSize: 9
+                                color: "#7d8590"
+                            }
+                        }
+                    }
+                }
 
-                                SequentialAnimation on scale {
-                                    loops: Animation.Infinite
-                                    running: true
-                                    PropertyAnimation { from: 1.0; to: 1.4; duration: 100 }
-                                    PropertyAnimation { from: 1.4; to: 1.0; duration: 100 }
-                                    PropertyAnimation { from: 1.0; to: 1.2; duration: 80 }
-                                    PropertyAnimation { from: 1.2; to: 1.0; duration: 80 }
-                                    PauseAnimation { duration: 600 }
+                // Pulse Rate Panel
+                Rectangle {
+                    width: (parent.width - 12) / 2
+                    height: parent.height
+                    color: "#21262d"
+                    radius: 8
+                    border.color: root.pulseValue !== "Geçersiz" && root.pulseValue !== "" ? "#da3633" : "#656d76" // Kırmızı veya gri
+                    border.width: 2
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 10
+
+                        Text {
+                            text: qsTr("PULSE")
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 14
+                            font.bold: true
+                            color: "#ff7b72" // Kırmızı metin
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+
+                        Rectangle {
+                            width: 100
+                            height: 60
+                            color: "#0d1117"
+                            radius: 6
+                            border.color: "#30363d"
+                            border.width: 1
+                            anchors.horizontalCenter: parent.horizontalCenter
+
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+
+                                Text {
+                                    text: root.pulseValue === "Geçersiz" || root.pulseValue === "" ? "--" : root.pulseValue
+                                    font.family: "Consolas, monospace"
+                                    font.pointSize: 24
+                                    font.bold: true
+                                    color: root.pulseValue !== "Geçersiz" && root.pulseValue !== "" ? "#ff7b72" : "#656d76"
+                                }
+
+                                // Kalp atışı ikonu ve animasyonu
+                                Text {
+                                    id: pulseIcon
+                                    text: "♥" // Kalp ikonu
+                                    font.family: "Consolas, monospace"
+                                    font.pointSize: 16
+                                    color: root.pulseValue !== "Geçersiz" && root.pulseValue !== "" ? "#ff7b72" : "#656d76"
+                                    anchors.verticalCenter: parent.verticalCenter
+
+                                    SequentialAnimation on scale {
+                                        loops: Animation.Infinite
+                                        running: root.pulseValue !== "Geçersiz" && root.pulseValue !== "" && root.pulseNumeric > 0
+                                        // Nabız hızına göre animasyon süresi ayarlanır
+                                        PropertyAnimation {
+                                            from: 1.0; to: 1.5;
+                                            duration: root.pulseNumeric > 0 ? (60000 / Math.max(root.pulseNumeric, 60) * 0.15) : 500
+                                        }
+                                        PropertyAnimation {
+                                            from: 1.5; to: 1.0;
+                                            duration: root.pulseNumeric > 0 ? (60000 / Math.max(root.pulseNumeric, 60) * 0.15) : 500
+                                        }
+                                        PropertyAnimation {
+                                            from: 1.0; to: 1.3;
+                                            duration: root.pulseNumeric > 0 ? (60000 / Math.max(root.pulseNumeric, 60) * 0.1) : 300
+                                        }
+                                        PropertyAnimation {
+                                            from: 1.3; to: 1.0;
+                                            duration: root.pulseNumeric > 0 ? (60000 / Math.max(root.pulseNumeric, 60) * 0.1) : 300
+                                        }
+                                        PauseAnimation {
+                                            duration: root.pulseNumeric > 0 ? (60000 / Math.max(root.pulseNumeric, 60) * 0.5) : 1000
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -184,159 +295,286 @@ ApplicationWindow {
                         Text {
                             text: qsTr("BPM")
                             font.family: "Consolas, monospace"
-                            font.pointSize: 8
-                            color: "#a0aec0"
+                            font.pointSize: 9
+                            color: "#7d8590"
                             anchors.horizontalCenter: parent.horizontalCenter
                         }
                     }
                 }
             }
 
-            // Waveform Monitor
+            // SpO2 Waveform Monitor
             Rectangle {
                 width: parent.width
                 height: 200
-                color: "#1a1f29"
-                radius: 6
-                border.color: "#2d3748"
+                color: "#0d1117" // Çok koyu arka plan
+                radius: 8
+                border.color: "#30363d"
                 border.width: 1
 
                 Column {
                     anchors.fill: parent
-                    anchors.margins: 10
+                    anchors.margins: 8
 
-                    // Waveform Header
+                    // SpO2 Waveform Başlığı
                     Rectangle {
                         width: parent.width
-                        height: 25
-                        color: "#2d3748"
+                        height: 30
+                        color: "#21262d"
                         radius: 4
 
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: parent.left
-                            anchors.leftMargin: 10
-                            spacing: 15
+                            anchors.leftMargin: 8
+                            spacing: 8
+
+                            Rectangle {
+                                width: 3
+                                height: 20
+                                color: "#58a6ff"
+                                radius: 1
+                            }
 
                             Text {
-                                text: qsTr("ECG WAVEFORM")
+                                text: qsTr("SpO₂ PLETHYSMOGRAPH")
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 10
+                                font.bold: true
+                                color: "#58a6ff"
+                            }
+
+                            Text {
+                                text: root.spo2Value === "Geçersiz" || root.spo2Value === "" ? "--" : root.spo2Value + "%"
                                 font.family: "Consolas, monospace"
                                 font.pointSize: 9
-                                font.bold: true
-                                color: "#00ff88"
+                                color: "#7d8590"
                             }
+                        }
 
-                            Text {
-                                text: "25mm/s"
-                                font.family: "Consolas, monospace"
-                                font.pointSize: 8
-                                color: "#a0aec0"
-                            }
-
-                            Text {
-                                text: "10mm/mV"
-                                font.family: "Consolas, monospace"
-                                font.pointSize: 8
-                                color: "#a0aec0"
-                            }
+                        Text {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "PI: " + (root.spo2Numeric > 0 ? (root.spo2Numeric * 0.12 / 10).toFixed(2) : "--") + "%"
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 8
+                            color: "#58a6ff"
                         }
                     }
 
-                    // Waveform Display
+                    // SpO2 Waveform Gösterimi
                     Rectangle {
                         width: parent.width
-                        height: parent.height - 35
-                        color: "#0f1419"
+                        height: parent.height - 40 // Başlık yüksekliği çıkarılır
+                        color: "#010409" // En koyu arka plan
                         radius: 4
 
                         Canvas {
-                            id: waveformCanvas
+                            id: spo2WaveformCanvas
                             anchors.fill: parent
-                            anchors.margins: 5
+                            anchors.margins: 3
 
-                            property real phase: 0
+                            property real phase: 0 // Dalga kaydırma fazı
+                            property int spo2Value: root.spo2Numeric
+                            property int pulseRate: root.pulseNumeric > 0 ? root.pulseNumeric : 75 // Geçersizse varsayılan 75
+                            property bool hasValidData: root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
 
                             onPaint: {
                                 var ctx = getContext("2d")
                                 ctx.clearRect(0, 0, width, height)
 
-                                // Grid çizgileri (medikal monitör tarzı)
-                                ctx.strokeStyle = "#1a4d3a"
-                                ctx.lineWidth = 0.5
+                                // Medikal grid sistemi
+                                drawMedicalGrid(ctx)
 
-                                // Dikey gridler
-                                for (var i = 0; i < width; i += 10) {
+                                if (hasValidData) {
+                                    // SpO2 Plethysmography waveform
+                                    drawSpO2Waveform(ctx)
+                                } else {
+                                    // Sinyal yoksa gösterge
+                                    drawNoSignal(ctx)
+                                }
+
+                                // Ölçüm imleçleri
+                                drawMeasurementCursors(ctx)
+                            }
+
+                            // Medikal grid çizimi fonksiyonu
+                            function drawMedicalGrid(ctx) {
+                                // İnce grid çizgileri (1mm, 5 piksel)
+                                ctx.strokeStyle = "#1c2128" // Koyu gri
+                                ctx.lineWidth = 0.3
+
+                                for (var i = 0; i < width; i += 5) {
                                     ctx.beginPath()
                                     ctx.moveTo(i, 0)
                                     ctx.lineTo(i, height)
                                     ctx.stroke()
                                 }
 
-                                // Yatay gridler
-                                for (var j = 0; j < height; j += 10) {
+                                for (var j = 0; j < height; j += 5) {
                                     ctx.beginPath()
                                     ctx.moveTo(0, j)
                                     ctx.lineTo(width, j)
                                     ctx.stroke()
                                 }
 
-                                // Kalın grid çizgileri (5'er aralıkla)
-                                ctx.strokeStyle = "#2d5a3d"
-                                ctx.lineWidth = 1
+                                // Kalın grid çizgileri (5mm, 25 piksel)
+                                ctx.strokeStyle = "#30363d" // Daha açık koyu gri
+                                ctx.lineWidth = 0.5
 
-                                for (var k = 0; k < width; k += 50) {
+                                for (var k = 0; k < width; k += 25) {
                                     ctx.beginPath()
                                     ctx.moveTo(k, 0)
                                     ctx.lineTo(k, height)
                                     ctx.stroke()
                                 }
 
-                                for (var l = 0; l < height; l += 50) {
+                                for (var l = 0; l < height; l += 25) {
                                     ctx.beginPath()
                                     ctx.moveTo(0, l)
                                     ctx.lineTo(width, l)
+                                    ctx.lineTo(width, l)
                                     ctx.stroke()
                                 }
-
-                                // ECG Waveform
-                                ctx.strokeStyle = "#00ff88"
-                                ctx.lineWidth = 2
-                                ctx.beginPath()
-
-                                for (var x = 0; x < width; x++) {
-                                    var normalizedX = (x + phase) / width * 4 * Math.PI
-                                    var ecgWave = 0
-
-                                    // QRS kompleksi simülasyonu
-                                    var beatPosition = normalizedX % (2 * Math.PI)
-                                    if (beatPosition < 0.3) {
-                                        ecgWave = Math.sin(beatPosition * 10) * 0.3
-                                    } else if (beatPosition < 0.5) {
-                                        ecgWave = Math.sin((beatPosition - 0.3) * 20) * 1.5
-                                    } else if (beatPosition < 0.8) {
-                                        ecgWave = Math.sin((beatPosition - 0.5) * 15) * -0.8
-                                    } else {
-                                        ecgWave = Math.sin((beatPosition - 0.8) * 8) * 0.2
-                                    }
-
-                                    var y = height/2 - ecgWave * 30
-
-                                    if (x === 0) {
-                                        ctx.moveTo(x, y)
-                                    } else {
-                                        ctx.lineTo(x, y)
-                                    }
-                                }
-                                ctx.stroke()
                             }
 
+                            function drawSpO2Waveform(ctx) {
+                                var amplitudeFactor = Math.max(0.3, spo2Value / 100.0);
+                                var amplitude = height * 0.3 * amplitudeFactor;
+                                var baseline = height * 0.7;
+
+                                var waveColor = spo2Value >= 95 ? "#58a6ff" :
+                                                spo2Value >= 90 ? "#ffa657" : "#ff7b72";
+
+                                ctx.strokeStyle = waveColor;
+                                ctx.lineWidth = 2.5;
+                                ctx.beginPath();
+
+                                var period = width / (pulseRate / 60.0 * 7.0);  // Daha geniş periyot = daha uzun dalga
+
+                                var xOffset = spo2WaveformCanvas.phase % period;
+
+                                for (var x = 0; x < width; x++) {
+                                    var currentX = x + xOffset;
+                                    var t = (currentX % period) / period;
+
+                                    var y;
+
+                                    // Daha dik çıkış
+                                    if (t < 0.15) {
+                                        y = -Math.pow(t / 0.15, 15.0) * amplitude + baseline;
+                                    }
+                                    // Çok kısa, ani peak
+                                    else if (t < 0.2) {
+                                        y = -amplitude + (t - 0.15) / 0.05 * (amplitude * 0.1) + baseline;
+                                    }
+                                    // Daha hızlı iniş
+                                    else if (t < 0.5) {
+                                        y = -amplitude * (1 - (t - 0.2) / 0.3 * 0.8) + baseline;
+                                    }
+                                    // Son toparlanma
+                                    else {
+                                        y = -amplitude * 0.2 * (1 - (t - 0.5) / 0.5) + baseline;
+                                    }
+
+                                    // Minimum jitter - daha stabil görünüm
+                                    if (spo2Value < 92 && spo2Value > 0) {
+                                        var distortionFactor = (92 - spo2Value) / 20.0;  // Daha düşük çarpan
+                                        y += (Math.random() - 0.5) * 1.0 * distortionFactor;
+                                        y += Math.sin(t * 20) * 1.0 * distortionFactor;
+                                    } else if (spo2Value === 0) {
+                                        y = baseline + (Math.random() - 0.5) * 2;
+                                    }
+
+                                    if (x === 0) {
+                                        ctx.moveTo(x, y);
+                                    } else {
+                                        ctx.lineTo(x, y);
+                                    }
+                                }
+
+                                ctx.stroke();
+
+                                // Baseline çizgisi
+                                ctx.strokeStyle = "#6e7681";
+                                ctx.lineWidth = 1;
+                                ctx.setLineDash([2, 2]);
+                                ctx.beginPath();
+                                ctx.moveTo(0, baseline);
+                                ctx.lineTo(width, baseline);
+                                ctx.stroke();
+                                ctx.setLineDash([]);
+
+                                // Değer etiketi
+                                ctx.fillStyle = waveColor;
+                                ctx.font = "bold 14px Consolas, monospace";
+                                ctx.fillText("SpO₂: " + spo2Value + "%", 10, 25);
+                            }
+
+                            // Sinyal yoksa gösterge çizimi
+                            function drawNoSignal(ctx) {
+                                var baseline = height * 0.6
+
+                                // Düz çizgi (kesikli)
+                                ctx.strokeStyle = "#656d76"
+                                ctx.lineWidth = 1
+                                ctx.setLineDash([5, 5])
+                                ctx.beginPath()
+                                ctx.moveTo(0, baseline)
+                                ctx.lineTo(width, baseline)
+                                ctx.stroke()
+                                ctx.setLineDash([])
+
+                                // "NO SIGNAL" metni
+                                ctx.fillStyle = "#656d76"
+                                ctx.font = "bold 14px Consolas, monospace"
+                                ctx.fillText("NO SIGNAL", 10, 25)
+                            }
+
+                            // Ölçüm imleçleri çizimi (kayan dikey çizgi ve kritik durum çerçevesi)
+                            function drawMeasurementCursors(ctx) {
+                                if (!hasValidData) return
+
+                                // Zaman cursoru (kayan dikey çizgi)
+                                var cursorX = (phase * 2) % width // Faz ile kayar
+
+                                ctx.strokeStyle = "#f85149" // Kırmızı
+                                ctx.lineWidth = 1
+                                ctx.setLineDash([])
+                                ctx.beginPath()
+                                ctx.moveTo(cursorX, 0)
+                                ctx.lineTo(cursorX, height)
+                                ctx.stroke()
+
+                                // Kritik durum overlay (SpO2 88'in altındaysa kırmızı çerçeve ve hafif kırmızı dolgu)
+                                if (spo2Value < 88 && spo2Value > 0) {
+                                    ctx.fillStyle = "#f8514920" // Yarı şeffaf kırmızı dolgu
+                                    ctx.fillRect(0, 0, width, height)
+
+                                    ctx.strokeStyle = "#f85149" // Kırmızı kenarlık
+                                    ctx.lineWidth = 3
+                                    ctx.setLineDash([15, 15]) // Kesikli kenarlık
+                                    ctx.strokeRect(3, 3, width-6, height-6)
+                                }
+                            }
+
+                            // Dalga formu animasyon zamanlayıcısı
                             Timer {
-                                interval: 50
+                                interval: 25 // Yaklaşık 40 FPS
                                 running: true
                                 repeat: true
                                 onTriggered: {
-                                    waveformCanvas.phase += 8
-                                    waveformCanvas.requestPaint()
+                                    if (spo2WaveformCanvas.hasValidData) {
+                                        // Nabız hızına göre kaydırma hızı
+                                        var speedMultiplier = Math.max(0.4, spo2WaveformCanvas.pulseRate / 75.0)
+                                        spo2WaveformCanvas.phase += 6 * speedMultiplier  // Daha hızlı
+                                    }
+                                    // Değerleri güncelleyip yeniden çizim isteği gönderir
+                                    spo2WaveformCanvas.spo2Value = root.spo2Numeric
+                                    spo2WaveformCanvas.pulseRate = root.pulseNumeric > 0 ? root.pulseNumeric : 75
+                                    spo2WaveformCanvas.hasValidData = root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
+                                    spo2WaveformCanvas.requestPaint()
                                 }
                             }
                         }
@@ -344,69 +582,158 @@ ApplicationWindow {
                 }
             }
 
-            // Alarm ve Status Panel
+            // Gelişmiş Status ve Alarm Panel
             Rectangle {
                 width: parent.width
-                height: 60
-                color: "#2d3748"
-                radius: 6
-                border.color: "#4a5568"
+                height: 80
+                color: "#21262d"
+                radius: 8
+                border.color: "#30363d"
                 border.width: 1
 
-                Row {
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.left: parent.left
-                    anchors.leftMargin: 15
-                    spacing: 20
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 8
 
-                    Text {
-                        text: qsTr("STATUS:")
-                        font.family: "Consolas, monospace"
-                        font.pointSize: 10
-                        font.bold: true
-                        color: "#a0aec0"
-                    }
-
-                    Rectangle {
-                        width: 60
+                    // Status Row
+                    Row {
+                        width: parent.width
                         height: 25
-                        radius: 12
-                        color: "#065f46"
-                        border.color: "#00ff88"
-                        border.width: 1
+                        spacing: 15
 
                         Text {
-                            anchors.centerIn: parent
-                            text: qsTr("NORMAL")
+                            text: qsTr("PATIENT STATUS:")
                             font.family: "Consolas, monospace"
-                            font.pointSize: 8
+                            font.pointSize: 10
                             font.bold: true
-                            color: "#00ff88"
+                            color: "#7d8590"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        // Hasta durumu göstergesi (NORMAL, HYPOXIC, CRITICAL)
+                        Rectangle {
+                            width: 80
+                            height: 22
+                            radius: 11
+                            color: { // Duruma göre arka plan rengi
+                                if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#21262d"
+                                return root.spo2Numeric >= 95 ? "#0f5132" : // Koyu yeşil
+                                       (root.spo2Numeric >= 90 ? "#664d03" : "#58151c") // Koyu turuncu, koyu kırmızı
+                            }
+                            border.color: { // Duruma göre kenarlık rengi
+                                if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#656d76"
+                                return root.spo2Numeric >= 95 ? "#7ee787" : // Açık yeşil
+                                       (root.spo2Numeric >= 90 ? "#ffa657" : "#ff7b72") // Açık turuncu, açık kırmızı
+                            }
+                            border.width: 1
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: { // Duruma göre metin
+                                    if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return qsTr("NO DATA")
+                                    return root.spo2Numeric >= 95 ? qsTr("NORMAL") :
+                                           (root.spo2Numeric >= 90 ? qsTr("HYPOXIC") : qsTr("CRITICAL"))
+                                }
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 8
+                                font.bold: true
+                                color: { // Duruma göre metin rengi
+                                    if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#656d76"
+                                    return root.spo2Numeric >= 95 ? "#7ee787" :
+                                           (root.spo2Numeric >= 90 ? "#ffa657" : "#ff7b72")
+                                }
+                            }
+                        }
+
+                        // Alarm göstergesi (yanıp sönen)
+                        Rectangle {
+                            width: 70
+                            height: 22
+                            radius: 11
+                            color: (root.spo2Numeric < 88 && root.spo2Numeric > 0) ? "#58151c" : "#0d1117" // Alarm varsa kırmızı, yoksa koyu
+                            border.color: (root.spo2Numeric < 88 && root.spo2Numeric > 0) ? "#ff7b72" : "#30363d"
+                            border.width: 1
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: (root.spo2Numeric < 88 && root.spo2Numeric > 0) ? qsTr("ALARM") : qsTr("MONITOR")
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 8
+                                font.bold: true
+                                color: (root.spo2Numeric < 88 && root.spo2Numeric > 0) ? "#ff7b72" : "#7d8590"
+                            }
+
+                            SequentialAnimation on opacity {
+                                loops: Animation.Infinite
+                                running: root.spo2Numeric < 88 && root.spo2Numeric > 0 // Alarm varsa yanıp söner
+                                PropertyAnimation { from: 1.0; to: 0.3; duration: 400 }
+                                PropertyAnimation { from: 0.3; to: 1.0; duration: 400 }
+                            }
                         }
                     }
 
-                    Text {
-                        text: qsTr("ALARMS:")
-                        font.family: "Consolas, monospace"
-                        font.pointSize: 10
-                        font.bold: true
-                        color: "#a0aec0"
-                    }
-
-                    Rectangle {
-                        width: 50
-                        height: 25
-                        radius: 12
-                        color: "#1f2937"
-                        border.color: "#6b7280"
-                        border.width: 1
+                    // Bilgi satırı
+                    Row {
+                        width: parent.width
+                        spacing: 20
 
                         Text {
-                            anchors.centerIn: parent
-                            text: qsTr("OFF")
+                            text: qsTr("Normal Range: 95-100%")
                             font.family: "Consolas, monospace"
                             font.pointSize: 8
-                            color: "#6b7280"
+                            color: "#656d76"
+                        }
+
+                        Text {
+                            text: "PI: " + (root.spo2Numeric > 0 ? (root.spo2Numeric * 0.12 / 10).toFixed(2) : "--") + "%"
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 8
+                            color: "#656d76"
+                        }
+
+                        Text {
+                            text: qsTr("Sensor: Finger")
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 8
+                            color: "#656d76"
+                        }
+
+                        Rectangle {
+                            width: 60
+                            height: 16
+                            radius: 8
+                            color: "#0d1117"
+                            border.color: "#30363d"
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: qsTr("RECORDING")
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 7
+                                color: "#58a6ff"
+                            }
+
+                            // Kayıt göstergesi (yanıp sönen nokta)
+                            Rectangle {
+                                width: 4
+                                height: 4
+                                radius: 2
+                                color: root.spo2Value !== "Geçersiz" && root.spo2Value !== "" ? "#f85149" : "#656d76"
+                                anchors.right: parent.right
+                                anchors.rightMargin: 4
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                SequentialAnimation on opacity {
+                                    loops: Animation.Infinite
+                                    running: root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
+                                    PropertyAnimation { from: 1.0; to: 0.2; duration: 1000 }
+                                    PropertyAnimation { from: 0.2; to: 1.0; duration: 1000 }
+                                }
+                            }
                         }
                     }
                 }

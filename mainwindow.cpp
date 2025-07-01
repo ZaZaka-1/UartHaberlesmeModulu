@@ -38,6 +38,12 @@ MainWindow::MainWindow(QObject *parent)
     connectionTimer->start(1000);
 }
 
+MainWindow::~MainWindow()
+{
+    if (serial->isOpen())
+        serial->close();
+}
+
 void MainWindow::openSerialPort()
 {
     if (!serial->open(QIODevice::ReadWrite)) {
@@ -126,17 +132,14 @@ void MainWindow::readData()
     parseBufferedData();
 }
 
-MainWindow::~MainWindow()
-{
-    // Eğer özel bir temizlik işlemi yapmayacaksanız, boş bırakabilirsiniz.
-}
-
 void MainWindow::parseBufferedData()
 {
     while (buffer.size() >= 4) {
         int headerIndex = buffer.indexOf(QByteArray::fromHex("AA55"));
         if (headerIndex == -1) {
-            buffer.clear();
+            // Sadece son 1 byte bırak ki olası yarım header kaçmasın
+            if (buffer.size() > 1)
+                buffer.remove(0, buffer.size() - 1);
             return;
         }
 
@@ -178,10 +181,12 @@ void MainWindow::parsePacketByCode(uint8_t code, const QByteArray &payload)
     for (uint8_t byte : payload) {
         hexDump += QString("%1 ").arg(byte, 2, 16, QLatin1Char('0')).toUpper();
     }
-    qDebug().noquote() << QString(" Code: 0x%1 Payload: %2").arg(code, 2, 16, QLatin1Char('0')).toUpper().arg(hexDump.trimmed());
+    qDebug().noquote() << QString(" Code: 0x%1 Payload: %2")
+                              .arg(code, 2, 16, QLatin1Char('0')).toUpper()
+                              .arg(hexDump.trimmed());
 
     switch (code) {
-    case 0x04: {  // ERT Parameters (isteğe bağlı log)
+    case 0x04: {
         if (payload.size() >= 6) {
             uint8_t rr = static_cast<uint8_t>(payload[0]);
             uint8_t hr = static_cast<uint8_t>(payload[1]);
@@ -191,15 +196,12 @@ void MainWindow::parsePacketByCode(uint8_t code, const QByteArray &payload)
             float t1 = rawT1 < 5000 ? rawT1 / 10.0 : 0.0;
             float t2 = rawT2 < 5000 ? rawT2 / 10.0 : 0.0;
 
-            qDebug().noquote() << QString(" ERT (Code 0x04) ➤ HR: %1 bpm | RR: %2 rpm | T1: %3 °C | T2: %4 °C")
-                                      .arg(hr)
-                                      .arg(rr)
-                                      .arg(t1, 0, 'f', 1)
-                                      .arg(t2, 0, 'f', 1);
+            qDebug().noquote() << QString(" ERT ➤ HR: %1 bpm | RR: %2 rpm | T1: %3 °C | T2: %4 °C")
+                                      .arg(hr).arg(rr).arg(t1, 0, 'f', 1).arg(t2, 0, 'f', 1);
         }
         break;
     }
-    case 0x15: {  // Biolight SPO2 verileri
+    case 0x15: {
         if (payload.size() >= 6) {
             uint8_t spo2 = static_cast<uint8_t>(payload[3]);
             uint16_t pulse = (static_cast<uint8_t>(payload[4]) << 8) | static_cast<uint8_t>(payload[5]);
@@ -216,9 +218,8 @@ void MainWindow::parsePacketByCode(uint8_t code, const QByteArray &payload)
                 emit pulseChanged();
             }
 
-            qDebug().noquote() << QString(" SPO2 (0x15) ➤ SpO2: %1 %% | Pulse: %2 bpm")
-                                      .arg(spo2Str)
-                                      .arg(pulseStr);
+            qDebug().noquote() << QString(" SPO2 ➤ SpO2: %1 %% | Pulse: %2 bpm")
+                                      .arg(spo2Str).arg(pulseStr);
         }
         break;
     }
@@ -232,10 +233,9 @@ void MainWindow::handleError(QSerialPort::SerialPortError error)
     if (error == QSerialPort::NoError)
         return;
 
-    qWarning() << "️ Serial Port Hatası:" << error << "-" << serial->errorString();
+    qWarning() << "Serial Port Hatası:" << error << "-" << serial->errorString();
 
-    if (error == QSerialPort::ResourceError || error == QSerialPort::DeviceNotFoundError) {
-        connectionSent = false;
-        connectionTimer->start(2000);
-    }
+    serial->close();
+    connectionSent = false;
+    QTimer::singleShot(2000, this, &MainWindow::openSerialPort);
 }

@@ -3,22 +3,21 @@
 
 #include <QObject>
 #include <QSerialPort>
-#include <QTimer>
 #include <QByteArray>
-#include <QString>  // Eksikti, QString için gerekli
+#include <QTimer>
 
 class MainWindow : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QString spo2Value READ spo2Value NOTIFY spo2Changed)
-    Q_PROPERTY(QString pulseValue READ pulseValue NOTIFY pulseChanged)
+    Q_PROPERTY(QString spo2 READ spo2 NOTIFY spo2Changed)
+    Q_PROPERTY(QString pulse READ pulse NOTIFY pulseChanged)
 
 public:
     explicit MainWindow(QObject *parent = nullptr);
-    ~MainWindow();  // Eksikti: Bellek sızıntısını önlemek için gerekli
+    ~MainWindow();
 
-    QString spo2Value() const { return m_spo2; }
-    QString pulseValue() const { return m_pulse; }
+    QString spo2() const { return m_spo2; }
+    QString pulse() const { return m_pulse; }
 
 signals:
     void spo2Changed();
@@ -33,25 +32,24 @@ private slots:
 
 private:
     void openSerialPort();
-    void parseBufferedData();
-    void parsePacketByCode(uint8_t code, const QByteArray &payload);
     QList<QByteArray> createIndividualCommands();
     QByteArray createSMMPacket(uint8_t code, const QByteArray &data);
+    void parseBufferedData();
+    void parsePacketByCode(uint8_t code, const QByteArray &payload);
 
-    QSerialPort *serial = nullptr;
-    QTimer *connectionTimer = nullptr;
-    QTimer *dataRequestTimer = nullptr;
-    QTimer *sequentialTimer = nullptr;
-
+    QSerialPort *serial;
     QByteArray buffer;
-    bool connectionSent = false;
-    QList<QByteArray> packetCommands;
-    int currentPacketIndex = 0;
 
     QString m_spo2;
     QString m_pulse;
 
-    Q_DISABLE_COPY(MainWindow)  // Kopyalamayı engelle
+    QTimer *connectionTimer;
+    QTimer *dataRequestTimer;
+    QTimer *sequentialTimer;
+
+    QList<QByteArray> packetCommands;
+    bool connectionSent;
+    int currentPacketIndex;
 };
 
 #endif // MAINWINDOW_H
