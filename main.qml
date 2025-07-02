@@ -371,213 +371,238 @@ ApplicationWindow {
                         radius: 4
 
                         Canvas {
-                            id: spo2WaveformCanvas
-                            anchors.fill: parent
-                            anchors.margins: 3
+                                                    id: spo2WaveformCanvas
+                                                    anchors.fill: parent
+                                                    anchors.margins: 3
 
-                            property real phase: 0 // Dalga kaydırma fazı
-                            property int spo2Value: root.spo2Numeric
-                            property int pulseRate: root.pulseNumeric > 0 ? root.pulseNumeric : 75 // Geçersizse varsayılan 75
-                            property bool hasValidData: root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
+                                                    property real phase: 0 // Dalga kaydırma fazı
+                                                    property int spo2Value: root.spo2Numeric
+                                                    property int pulseRate: root.pulseNumeric > 0 ? root.pulseNumeric : 75 // Geçersizse varsayılan 75
+                                                    property bool hasValidData: root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
 
-                            onPaint: {
-                                var ctx = getContext("2d")
-                                ctx.clearRect(0, 0, width, height)
+                                                    onPaint: {
+                                                        var ctx = getContext("2d")
+                                                        ctx.clearRect(0, 0, width, height)
 
-                                // Medikal grid sistemi
-                                drawMedicalGrid(ctx)
+                                                        // Medikal grid sistemi
+                                                        drawMedicalGrid(ctx)
 
-                                if (hasValidData) {
-                                    // SpO2 Plethysmography waveform
-                                    drawSpO2Waveform(ctx)
-                                } else {
-                                    // Sinyal yoksa gösterge
-                                    drawNoSignal(ctx)
-                                }
+                                                        if (hasValidData) {
+                                                            // SpO2 Plethysmography waveform
+                                                            drawSpO2Waveform(ctx)
+                                                        } else {
+                                                            // Sinyal yoksa gösterge
+                                                            drawNoSignal(ctx)
+                                                        }
 
-                                // Ölçüm imleçleri
-                                drawMeasurementCursors(ctx)
-                            }
+                                                        // Ölçüm imleçleri
+                                                        drawMeasurementCursors(ctx)
+                                                    }
 
-                            // Medikal grid çizimi fonksiyonu
-                            function drawMedicalGrid(ctx) {
-                                // İnce grid çizgileri (1mm, 5 piksel)
-                                ctx.strokeStyle = "#1c2128" // Koyu gri
-                                ctx.lineWidth = 0.3
+                                                    // Medikal grid çizimi fonksiyonu
+                                                    function drawMedicalGrid(ctx) {
+                                                        // İnce grid çizgileri (1mm, 5 piksel)
+                                                        ctx.strokeStyle = "#1c2128" // Koyu gri
+                                                        ctx.lineWidth = 0.3
 
-                                for (var i = 0; i < width; i += 5) {
-                                    ctx.beginPath()
-                                    ctx.moveTo(i, 0)
-                                    ctx.lineTo(i, height)
-                                    ctx.stroke()
-                                }
+                                                        for (var i = 0; i < width; i += 5) {
+                                                            ctx.beginPath()
+                                                            ctx.moveTo(i, 0)
+                                                            ctx.lineTo(i, height)
+                                                            ctx.stroke()
+                                                        }
 
-                                for (var j = 0; j < height; j += 5) {
-                                    ctx.beginPath()
-                                    ctx.moveTo(0, j)
-                                    ctx.lineTo(width, j)
-                                    ctx.stroke()
-                                }
+                                                        for (var j = 0; j < height; j += 5) {
+                                                            ctx.beginPath()
+                                                            ctx.moveTo(0, j)
+                                                            ctx.lineTo(width, j)
+                                                            ctx.stroke()
+                                                        }
 
-                                // Kalın grid çizgileri (5mm, 25 piksel)
-                                ctx.strokeStyle = "#30363d" // Daha açık koyu gri
-                                ctx.lineWidth = 0.5
+                                                        // Kalın grid çizgileri (5mm, 25 piksel)
+                                                        ctx.strokeStyle = "#30363d" // Daha açık koyu gri
+                                                        ctx.lineWidth = 0.5
 
-                                for (var k = 0; k < width; k += 25) {
-                                    ctx.beginPath()
-                                    ctx.moveTo(k, 0)
-                                    ctx.lineTo(k, height)
-                                    ctx.stroke()
-                                }
+                                                        for (var k = 0; k < width; k += 25) {
+                                                            ctx.beginPath()
+                                                            ctx.moveTo(k, 0)
+                                                            ctx.lineTo(k, height)
+                                                            ctx.stroke()
+                                                        }
 
-                                for (var l = 0; l < height; l += 25) {
-                                    ctx.beginPath()
-                                    ctx.moveTo(0, l)
-                                    ctx.lineTo(width, l)
-                                    ctx.lineTo(width, l)
-                                    ctx.stroke()
-                                }
-                            }
+                                                        for (var l = 0; l < height; l += 25) {
+                                                            ctx.beginPath()
+                                                            ctx.moveTo(0, l)
+                                                            ctx.lineTo(width, l)
+                                                            ctx.lineTo(width, l)
+                                                            ctx.stroke()
+                                                        }
+                                                    }
 
-                            function drawSpO2Waveform(ctx) {
-                                var amplitudeFactor = Math.max(0.3, spo2Value / 100.0);
-                                var amplitude = height * 0.3 * amplitudeFactor;
-                                var baseline = height * 0.7;
+                                                    function drawSpO2Waveform(ctx) {
+                                                        var amplitudeFactor = Math.max(0.3, spo2Value / 100.0);
+                                                        var amplitude = height * 0.4 * amplitudeFactor;
+                                                        var baseline = height * 0.6;
 
-                                var waveColor = spo2Value >= 95 ? "#58a6ff" :
-                                                spo2Value >= 90 ? "#ffa657" : "#ff7b72";
+                                                        var waveColor = spo2Value >= 95 ? "#58a6ff" :
+                                                                        spo2Value >= 90 ? "#ffa657" : "#ff7b72";
 
-                                ctx.strokeStyle = waveColor;
-                                ctx.lineWidth = 2.5;
-                                ctx.beginPath();
+                                                        ctx.strokeStyle = waveColor;
+                                                        ctx.lineWidth = 2.5;
+                                                        ctx.beginPath();
 
-                                var period = width / (pulseRate / 60.0 * 7.0);  // Daha geniş periyot = daha uzun dalga
+                                                        // Daha fazla dalga için kısa periyot
+                                                        var period = width / (pulseRate / 60.0 * 12.0);
 
-                                var xOffset = spo2WaveformCanvas.phase % period;
+                                                        var xOffset = spo2WaveformCanvas.phase % period;
 
-                                for (var x = 0; x < width; x++) {
-                                    var currentX = x + xOffset;
-                                    var t = (currentX % period) / period;
+                                                        for (var x = 0; x < width; x++) {
+                                                            var currentX = x + xOffset;
+                                                            var t = (currentX % period) / period;
 
-                                    var y;
+                                                            var y;
 
-                                    // Daha dik çıkış
-                                    if (t < 0.15) {
-                                        y = -Math.pow(t / 0.15, 15.0) * amplitude + baseline;
-                                    }
-                                    // Çok kısa, ani peak
-                                    else if (t < 0.2) {
-                                        y = -amplitude + (t - 0.15) / 0.05 * (amplitude * 0.1) + baseline;
-                                    }
-                                    // Daha hızlı iniş
-                                    else if (t < 0.5) {
-                                        y = -amplitude * (1 - (t - 0.2) / 0.3 * 0.8) + baseline;
-                                    }
-                                    // Son toparlanma
-                                    else {
-                                        y = -amplitude * 0.2 * (1 - (t - 0.5) / 0.5) + baseline;
-                                    }
+                                                            // Temiz bifid plethysmography dalga formu - düz çizgiler
+                                                            if (t < 0.1) {
+                                                                // Düz baseline
+                                                                y = baseline;
+                                                            }
+                                                            else if (t < 0.15) {
+                                                                // Hızlı düz çıkış
+                                                                var rise = (t - 0.1) / 0.05;
+                                                                y = baseline - rise * amplitude;
+                                                            }
+                                                            else if (t < 0.2) {
+                                                                // İlk tepe (düz)
+                                                                y = baseline - amplitude;
+                                                            }
+                                                            else if (t < 0.28) {
+                                                                // Düz iniş - dikrotik çentiğe
+                                                                var fall1 = (t - 0.2) / 0.08;
+                                                                y = baseline - amplitude + fall1 * amplitude * 0.4;
+                                                            }
+                                                            else if (t < 0.32) {
+                                                                // Dikrotik çentik (düz düşük seviye)
+                                                                y = baseline - amplitude * 0.6;
+                                                            }
+                                                            else if (t < 0.37) {
+                                                                // İkinci tepe çıkış (düz)
+                                                                var rise2 = (t - 0.32) / 0.05;
+                                                                y = baseline - amplitude * 0.6 - rise2 * amplitude * 0.15;
+                                                            }
+                                                            else if (t < 0.42) {
+                                                                // İkinci tepe (düz)
+                                                                y = baseline - amplitude * 0.75;
+                                                            }
+                                                            else if (t < 0.55) {
+                                                                // Düz iniş baseline'a
+                                                                var fall2 = (t - 0.42) / 0.13;
+                                                                y = baseline - amplitude * 0.75 + fall2 * amplitude * 0.75;
+                                                            }
+                                                            else {
+                                                                // Düz baseline
+                                                                y = baseline;
+                                                            }
 
-                                    // Minimum jitter - daha stabil görünüm
-                                    if (spo2Value < 92 && spo2Value > 0) {
-                                        var distortionFactor = (92 - spo2Value) / 20.0;  // Daha düşük çarpan
-                                        y += (Math.random() - 0.5) * 1.0 * distortionFactor;
-                                        y += Math.sin(t * 20) * 1.0 * distortionFactor;
-                                    } else if (spo2Value === 0) {
-                                        y = baseline + (Math.random() - 0.5) * 2;
-                                    }
+                                                            // Düşük SpO2'de minimal bozulma
+                                                            if (spo2Value < 90 && spo2Value > 0) {
+                                                                var distortionFactor = (90 - spo2Value) / 30.0;
+                                                                y += (Math.random() - 0.5) * 1.0 * distortionFactor;
+                                                            } else if (spo2Value === 0) {
+                                                                y = baseline + (Math.random() - 0.5) * 2;
+                                                            }
 
-                                    if (x === 0) {
-                                        ctx.moveTo(x, y);
-                                    } else {
-                                        ctx.lineTo(x, y);
-                                    }
-                                }
+                                                            if (x === 0) {
+                                                                ctx.moveTo(x, y);
+                                                            } else {
+                                                                ctx.lineTo(x, y);
+                                                            }
+                                                        }
 
-                                ctx.stroke();
+                                                        ctx.stroke();
 
-                                // Baseline çizgisi
-                                ctx.strokeStyle = "#6e7681";
-                                ctx.lineWidth = 1;
-                                ctx.setLineDash([2, 2]);
-                                ctx.beginPath();
-                                ctx.moveTo(0, baseline);
-                                ctx.lineTo(width, baseline);
-                                ctx.stroke();
-                                ctx.setLineDash([]);
+                                                        // Baseline çizgisi
+                                                        ctx.strokeStyle = "#6e7681";
+                                                        ctx.lineWidth = 1;
+                                                        ctx.setLineDash([2, 2]);
+                                                        ctx.beginPath();
+                                                        ctx.moveTo(0, baseline);
+                                                        ctx.lineTo(width, baseline);
+                                                        ctx.stroke();
+                                                        ctx.setLineDash([]);
 
-                                // Değer etiketi
-                                ctx.fillStyle = waveColor;
-                                ctx.font = "bold 14px Consolas, monospace";
-                                ctx.fillText("SpO₂: " + spo2Value + "%", 10, 25);
-                            }
+                                                        // Değer etiketi
+                                                        ctx.fillStyle = waveColor;
+                                                        ctx.font = "bold 14px Consolas, monospace";
+                                                        ctx.fillText("SpO₂: " + spo2Value + "%", 10, 25);
+                                                    }
 
-                            // Sinyal yoksa gösterge çizimi
-                            function drawNoSignal(ctx) {
-                                var baseline = height * 0.6
+                                                    // Sinyal yoksa gösterge çizimi
+                                                    function drawNoSignal(ctx) {
+                                                        var baseline = height * 0.6
 
-                                // Düz çizgi (kesikli)
-                                ctx.strokeStyle = "#656d76"
-                                ctx.lineWidth = 1
-                                ctx.setLineDash([5, 5])
-                                ctx.beginPath()
-                                ctx.moveTo(0, baseline)
-                                ctx.lineTo(width, baseline)
-                                ctx.stroke()
-                                ctx.setLineDash([])
+                                                        // Düz çizgi (kesikli)
+                                                        ctx.strokeStyle = "#656d76"
+                                                        ctx.lineWidth = 1
+                                                        ctx.setLineDash([5, 5])
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(0, baseline)
+                                                        ctx.lineTo(width, baseline)
+                                                        ctx.stroke()
+                                                        ctx.setLineDash([])
 
-                                // "NO SIGNAL" metni
-                                ctx.fillStyle = "#656d76"
-                                ctx.font = "bold 14px Consolas, monospace"
-                                ctx.fillText("NO SIGNAL", 10, 25)
-                            }
+                                                        // "NO SIGNAL" metni
+                                                        ctx.fillStyle = "#656d76"
+                                                        ctx.font = "bold 14px Consolas, monospace"
+                                                        ctx.fillText("NO SIGNAL", 10, 25)
+                                                    }
 
-                            // Ölçüm imleçleri çizimi (kayan dikey çizgi ve kritik durum çerçevesi)
-                            function drawMeasurementCursors(ctx) {
-                                if (!hasValidData) return
+                                                    // Ölçüm imleçleri çizimi (kayan dikey çizgi ve kritik durum çerçevesi)
+                                                    function drawMeasurementCursors(ctx) {
+                                                        if (!hasValidData) return
 
-                                // Zaman cursoru (kayan dikey çizgi)
-                                var cursorX = (phase * 2) % width // Faz ile kayar
+                                                        // Zaman cursoru (kayan dikey çizgi)
+                                                        var cursorX = (phase * 2) % width // Faz ile kayar
 
-                                ctx.strokeStyle = "#f85149" // Kırmızı
-                                ctx.lineWidth = 1
-                                ctx.setLineDash([])
-                                ctx.beginPath()
-                                ctx.moveTo(cursorX, 0)
-                                ctx.lineTo(cursorX, height)
-                                ctx.stroke()
+                                                        ctx.strokeStyle = "#f85149" // Kırmızı
+                                                        ctx.lineWidth = 1
+                                                        ctx.setLineDash([])
+                                                        ctx.beginPath()
+                                                        ctx.moveTo(cursorX, 0)
+                                                        ctx.lineTo(cursorX, height)
+                                                        ctx.stroke()
 
-                                // Kritik durum overlay (SpO2 88'in altındaysa kırmızı çerçeve ve hafif kırmızı dolgu)
-                                if (spo2Value < 88 && spo2Value > 0) {
-                                    ctx.fillStyle = "#f8514920" // Yarı şeffaf kırmızı dolgu
-                                    ctx.fillRect(0, 0, width, height)
+                                                        // Kritik durum overlay (SpO2 88'in altındaysa kırmızı çerçeve ve hafif kırmızı dolgu)
+                                                        if (spo2Value < 88 && spo2Value > 0) {
+                                                            ctx.fillStyle = "#f8514920" // Yarı şeffaf kırmızı dolgu
+                                                            ctx.fillRect(0, 0, width, height)
 
-                                    ctx.strokeStyle = "#f85149" // Kırmızı kenarlık
-                                    ctx.lineWidth = 3
-                                    ctx.setLineDash([15, 15]) // Kesikli kenarlık
-                                    ctx.strokeRect(3, 3, width-6, height-6)
-                                }
-                            }
+                                                            ctx.strokeStyle = "#f85149" // Kırmızı kenarlık
+                                                            ctx.lineWidth = 3
+                                                            ctx.setLineDash([15, 15]) // Kesikli kenarlık
+                                                            ctx.strokeRect(3, 3, width-6, height-6)
+                                                        }
+                                                    }
 
-                            // Dalga formu animasyon zamanlayıcısı
-                            Timer {
-                                interval: 25 // Yaklaşık 40 FPS
-                                running: true
-                                repeat: true
-                                onTriggered: {
-                                    if (spo2WaveformCanvas.hasValidData) {
-                                        // Nabız hızına göre kaydırma hızı
-                                        var speedMultiplier = Math.max(0.4, spo2WaveformCanvas.pulseRate / 75.0)
-                                        spo2WaveformCanvas.phase += 6 * speedMultiplier  // Daha hızlı
-                                    }
-                                    // Değerleri güncelleyip yeniden çizim isteği gönderir
-                                    spo2WaveformCanvas.spo2Value = root.spo2Numeric
-                                    spo2WaveformCanvas.pulseRate = root.pulseNumeric > 0 ? root.pulseNumeric : 75
-                                    spo2WaveformCanvas.hasValidData = root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
-                                    spo2WaveformCanvas.requestPaint()
-                                }
-                            }
-                        }
+                                                    // Dalga formu animasyon zamanlayıcısı
+                                                    Timer {
+                                                        interval: 25 // Yaklaşık 40 FPS
+                                                        running: true
+                                                        repeat: true
+                                                        onTriggered: {
+                                                            if (spo2WaveformCanvas.hasValidData) {
+                                                                // Nabız hızına göre kaydırma hızı
+                                                                var speedMultiplier = Math.max(0.4, spo2WaveformCanvas.pulseRate / 75.0)
+                                                                spo2WaveformCanvas.phase += 6 * speedMultiplier  // Daha hızlı
+                                                            }
+                                                            // Değerleri güncelleyip yeniden çizim isteği gönderir
+                                                            spo2WaveformCanvas.spo2Value = root.spo2Numeric
+                                                            spo2WaveformCanvas.pulseRate = root.pulseNumeric > 0 ? root.pulseNumeric : 75
+                                                            spo2WaveformCanvas.hasValidData = root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
+                                                            spo2WaveformCanvas.requestPaint()
+                                                        }
+                                                    }
+                                                }
                     }
                 }
             }

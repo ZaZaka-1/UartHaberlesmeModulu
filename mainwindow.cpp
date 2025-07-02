@@ -1,4 +1,6 @@
 #include "mainwindow.h"
+#include <QDir>
+
 #include <QDebug>
 
 MainWindow::MainWindow(QObject *parent)
@@ -9,6 +11,8 @@ MainWindow::MainWindow(QObject *parent)
     connectionSent(false),
     currentPacketIndex(0)
 {
+    initDatabase();
+
     serial->setPortName("COM4");
     serial->setBaudRate(375000);
     serial->setDataBits(QSerialPort::Data8);
@@ -218,8 +222,11 @@ void MainWindow::parsePacketByCode(uint8_t code, const QByteArray &payload)
                 emit pulseChanged();
             }
 
+            insertMeasurement(spo2Str, pulseStr);
+
             qDebug().noquote() << QString(" SPO2 ➤ SpO2: %1 %% | Pulse: %2 bpm")
                                       .arg(spo2Str).arg(pulseStr);
+
         }
         break;
     }
@@ -239,3 +246,57 @@ void MainWindow::handleError(QSerialPort::SerialPortError error)
     connectionSent = false;
     QTimer::singleShot(2000, this, &MainWindow::openSerialPort);
 }
+
+
+
+
+//SQLKISMI
+
+void MainWindow::initDatabase()
+{
+    db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName(QDir::homePath() + "/Desktop/sqlite_data/measurement_data.db");
+
+    if (!db.open()) {
+        qWarning() << "Veritabanı açılamadı:" << db.lastError().text();
+        return;
+    }
+
+    QSqlQuery query;
+    QString createTable =
+        "CREATE TABLE IF NOT EXISTS measurements ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "timestamp TEXT, "
+        "spo2 TEXT, "
+        "pulse TEXT)";
+
+    if (!query.exec(createTable)) {
+        qWarning() << "Tablo oluşturulamadı:" << query.lastError().text();
+    } else {
+        qDebug() << "Veritabanı ve tablo hazır.";
+    }
+
+}
+
+
+void MainWindow::insertMeasurement(const QString &spo2, const QString &pulse)
+{
+    if (!db.isOpen())
+        return;
+
+    QSqlQuery query;
+    query.prepare("INSERT INTO measurements (timestamp, spo2, pulse) "
+                  "VALUES (:timestamp, :spo2, :pulse)");
+
+    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    query.bindValue(":timestamp", timestamp);
+    query.bindValue(":spo2", spo2);
+    query.bindValue(":pulse", pulse);
+
+    if (!query.exec()) {
+        qWarning() << "Veri eklenemedi:" << query.lastError().text();
+    } else {
+        qDebug() << "Veri eklendi:" << timestamp << spo2 << pulse;
+    }
+}
+

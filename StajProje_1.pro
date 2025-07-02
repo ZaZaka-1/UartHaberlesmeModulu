@@ -4,6 +4,9 @@ CONFIG   += c++17
 CONFIG   += qmltypes
 CONFIG   += qtquickcompiler
 
+QT += sql
+
+
 TEMPLATE = app
 TARGET = StajProje_1
 

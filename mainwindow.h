@@ -6,6 +6,14 @@
 #include <QByteArray>
 #include <QTimer>
 
+//SQL KOMUTLARI
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QDateTime>
+
+
+
 class MainWindow : public QObject
 {
     Q_OBJECT
@@ -50,6 +58,18 @@ private:
     QList<QByteArray> packetCommands;
     bool connectionSent;
     int currentPacketIndex;
+
+
+    //SQL KISMI
+
+   QSqlDatabase db;
+
+    void initDatabase();
+    void insertMeasurement(const QString &spo2, const QString &pulse);
+
+
+
+
 };
 
 #endif // MAINWINDOW_H
