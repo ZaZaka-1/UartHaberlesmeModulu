@@ -28,6 +28,9 @@ public:
     Q_INVOKABLE void clearMeasurements(); // Tüm ölçümleri temizle
     Q_INVOKABLE int getMeasurementCount();
 
+public slots:
+    void stopDataStream();
+
 signals:
     void measurementAdded();
 
@@ -38,6 +41,10 @@ public:
     QString spo2() const { return m_spo2; }
     QString pulse() const { return m_pulse; }
     bool isSerialConnected() const;
+
+    Q_INVOKABLE QVariantList getMeasurementsFromDatabase(int limit);
+    Q_INVOKABLE int getTotalMeasurementCount();
+    Q_INVOKABLE void clearDatabase();
 
 signals:
     void spo2Changed();
@@ -64,6 +71,8 @@ private:
     void parseBufferedData();
     void parsePacketByCode(uint8_t code, const QByteArray &payload);
 
+    QDateTime lastInsertTime;
+
     QSerialPort *serial;
     QByteArray buffer;
 
@@ -83,6 +92,10 @@ private:
 
     void initDatabase();
     void insertMeasurement(const QString &spo2, const QString &pulse);
+
+private:
+    // Mevcut değişkenlerinizin yanına ekleyin
+    QDateTime lastSaveTime;
 };
 
 #endif // MAINWINDOW_H

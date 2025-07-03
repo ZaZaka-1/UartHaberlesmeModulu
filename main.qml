@@ -907,48 +907,96 @@ ApplicationWindow {
                     }
                 }
             }
+            // Status ve Alarm Panel'in altına eklenecek buton düzeni
+            Rectangle {
+                width: parent.width
+                height: 60
+                color: "#21262d"
+                radius: 8
+                border.color: "#30363d"
+                border.width: 1
 
-        }
-    }
-
-    Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottomMargin: 20
-            width: parent.width - 40
-            height: 50
-            color: "#21262d"
-            radius: 8
-            border.color: "#30363d"
-            border.width: 1
-            visible: !root.showMain2  // Sadece ana sayfada görünsün
-
-            Button {
-                anchors.centerIn: parent
-                width: parent.width - 20
-                height: 35
-                background: Rectangle {
-                    color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
-                    radius: 6
-                    border.color: "#58a6ff"
-                    border.width: 1
-                }
-                Text {
+                Row {
                     anchors.centerIn: parent
-                    text: qsTr("Veri Tablosu")
-                    font.family: "Consolas, monospace"
-                    font.pointSize: 11
-                    font.bold: true
-                    color: "#58a6ff"
-                }
-                onClicked: {
-                    console.log("Butona tıklandı!")
-                    root.isActive = false
-                    root.showMain2 = true
-                    console.log("showMain2:", root.showMain2)
+                    spacing: 20
+
+                    // Veri Akışını Başlat Butonu
+
+
+                    // Veri Tablosu Butonu
+                    Button {
+                        width: 180
+                        height: 35
+                        background: Rectangle {
+                            color: parent.pressed ? "#2563eb" : (parent.hovered ? "#2d333b" : "#21262d")
+                            radius: 6
+                            border.color: "#58a6ff"
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: qsTr("Veri Tablosu")
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 10
+                            font.bold: true
+                            color: "#58a6ff"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: {
+                            console.log("Butona tıklandı - veri akışı durduruluyor!")
+
+                            // C++ backend'den veri akışını durdur
+                            if (typeof mainWindow !== 'undefined' && mainWindow) {
+                                mainWindow.stopDataStream()
+                            }
+
+                            // QML animasyonlarını durdur
+                            root.isActive = false
+
+                            // Sayfa geçişi
+                            root.showMain2 = true
+
+                            console.log("Veri akışı durduruldu ve main2.qml'e geçiliyor")
+                        }
+                    }
                 }
             }
+
+
+
+
+            Button {
+                width: 200
+                height: 35
+                anchors.horizontalCenter: parent.horizontalCenter
+                background: Rectangle {
+                color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
+                radius: 6
+                border.color: "#58a6ff"
+                border.width: 1
+                }
+                  contentItem: Text {
+                  text: qsTr("Veri Akışını Başlat")
+                  font.family: "Consolas, monospace"
+                  font.pointSize: 10
+                  font.bold: true
+                  color: "#58a6ff"
+                  horizontalAlignment: Text.AlignHCenter
+                  verticalAlignment: Text.AlignVCenter
+                }
+                     onClicked: {
+                     if (!mainWindow.serialConnected) {
+                        mainWindow.reconnectSerial()
+                        root.isActive = true
+                         console.log("Veri akışı başlatıldı.")
+                        } else {
+                                console.log("Veri akışı zaten aktif.")
+                                }
+                    }
+            }
         }
- }
+    }
+  }
+
 }
 

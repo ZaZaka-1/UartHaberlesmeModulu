@@ -215,6 +215,7 @@ void MainWindow::parseBufferedData()
 
 void MainWindow::parsePacketByCode(uint8_t code, const QByteArray &payload)
 {
+
     QString hexDump;
     for (uint8_t byte : payload) {
         hexDump += QString("%1 ").arg(byte, 2, 16, QLatin1Char('0')).toUpper();
@@ -443,4 +444,95 @@ int MainWindow::getMeasurementCount()
         return query.value(0).toInt();
     }
     return 0;
+}
+
+//veri akışını durdurmak için
+void MainWindow::stopDataStream()
+{
+    qDebug() << "Veri akışı durduruldu!";
+
+    // Tüm timer'ları durdur
+    if (connectionTimer && connectionTimer->isActive()) {
+        connectionTimer->stop();
+    }
+    if (dataRequestTimer && dataRequestTimer->isActive()) {
+        dataRequestTimer->stop();
+    }
+    if (sequentialTimer && sequentialTimer->isActive()) {
+        sequentialTimer->stop();
+    }
+
+    // Seri portu kapat
+    if (serial && serial->isOpen()) {
+        serial->close();
+    }
+
+    // Bayrakları sıfırla
+    connectionSent = false;
+
+    qDebug() << "Tüm veri akışı durduruldu - timer'lar ve seri port kapatıldı";
+}
+
+// Veritabanından son N kaydı al
+QVariantList MainWindow::getMeasurementsFromDatabase(int limit)
+{
+    QVariantList measurements;
+    if (!db.isOpen()) {
+        qWarning() << "Veritabanı bağlantısı yok";
+        return measurements;
+    }
+
+    QSqlQuery query;
+    query.prepare("SELECT id, timestamp, spo2, pulse FROM measurements ORDER BY timestamp DESC LIMIT :limit");
+    query.bindValue(":limit", limit);
+
+    if (!query.exec()) {
+        qWarning() << "Veriler alınamadı:" << query.lastError().text();
+        return measurements;
+    }
+
+    while (query.next()) {
+        QVariantMap row;
+        row["id"] = query.value("id").toInt();
+        row["timestamp"] = query.value("timestamp").toString();
+        row["spo2"] = query.value("spo2").toString();
+        row["pulse"] = query.value("pulse").toString();
+        measurements.append(row);
+    }
+
+    return measurements;
+}
+
+// Toplam ölçüm sayısını al
+int MainWindow::getTotalMeasurementCount()
+{
+    if (!db.isOpen()) {
+        qWarning() << "Veritabanı bağlantısı yok";
+        return 0;
+    }
+
+    QSqlQuery query("SELECT COUNT(*) FROM measurements");
+    if (!query.exec() || !query.next()) {
+        qWarning() << "Toplam kayıt sayısı alınamadı:" << query.lastError().text();
+        return 0;
+    }
+
+    return query.value(0).toInt();
+}
+
+// Veritabanını temizle
+void MainWindow::clearDatabase()
+{
+    if (!db.isOpen()) {
+        qWarning() << "Veritabanı bağlantısı yok";
+        return;
+    }
+
+    QSqlQuery query;
+    if (!query.exec("DELETE FROM measurements")) {
+        qWarning() << "Veritabanı temizlenemedi:" << query.lastError().text();
+    } else {
+        qDebug() << "Tüm veriler silindi";
+        emit measurementAdded(); // QML tarafı tabloyu güncellesin
+    }
 }

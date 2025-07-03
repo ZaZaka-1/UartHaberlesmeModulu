@@ -7,21 +7,95 @@ Item {
     signal navigateBack()  // Geri dönüş sinyali
 
     property var measurements: []
+    property bool updatePending: false
+    property var seenTimestamps: ({})  // Görülen timestamp'leri takip etmek için
 
     Component.onCompleted: {
         loadMeasurements()
     }
 
-    // Yeni ölçüm eklendiğinde tabloyu güncelle
+    // Yeni ölçüm eklendiğinde tabloyu güncelle - ancak yavaşlatılmış
     Connections {
         target: mainWindow
         function onMeasurementAdded() {
+            // Eğer zaten bir güncelleme bekliyorsa, yeni güncelleme yapma
+            if (!updatePending) {
+                updatePending = true
+                // 1 saniye bekle, sonra güncelle
+                updateTimer.start()
+            }
+        }
+    }
+
+    // Güncelleme timer'ı - veri akışını yavaşlatmak için
+    Timer {
+        id: updateTimer
+        interval: 1000  // 1 saniye
+        running: false
+        repeat: false
+        onTriggered: {
+            loadMeasurements()
+            updatePending = false
+        }
+    }
+
+    // Otomatik güncelleme timer'ı - belirli aralıklarla tabloyu güncelle
+    Timer {
+        id: autoUpdateTimer
+        interval: 2000  // 2 saniyede bir güncelle
+        running: false
+        repeat: true
+        onTriggered: {
             loadMeasurements()
         }
     }
 
     function loadMeasurements() {
-        measurements = mainWindow.getRecentMeasurements(100) // Son 100 ölçüm
+        // Database'den son verileri al
+        var allMeasurements = mainWindow.getMeasurementsFromDatabase(200) // Son 200 ölçüm
+
+        if (!allMeasurements || allMeasurements.length === 0) {
+            console.log("Database'den veri alınamadı")
+            return
+        }
+
+        // Yeni verileri filtrele
+        var newMeasurements = []
+
+        for (var i = 0; i < allMeasurements.length; i++) {
+            var measurement = allMeasurements[i]
+            var timestamp = measurement.timestamp
+
+            // Saniye seviyesinde timestamp'i al
+            var timestampSeconds = timestamp.substring(0, 19) // "YYYY-MM-DD HH:MM:SS" formatında
+
+            // Bu saniye daha önce görülmemişse listeye ekle
+            if (!seenTimestamps[timestampSeconds]) {
+                seenTimestamps[timestampSeconds] = true
+                newMeasurements.push(measurement)
+            }
+        }
+
+        // Yeni verileri var ise listenin başına ekle (en yeni veriler üstte)
+        if (newMeasurements.length > 0) {
+            // Tarihe göre ters sırala (en yeni üstte)
+            newMeasurements.sort(function(a, b) {
+                return new Date(b.timestamp) - new Date(a.timestamp)
+            })
+
+            measurements = newMeasurements.concat(measurements)
+
+            // Maksimum 500 kayıt tut (performans için)
+            if (measurements.length > 500) {
+                measurements = measurements.slice(0, 500)
+            }
+        }
+    }
+
+    // Measurements dizisini temizle
+    function clearMeasurements() {
+        measurements = []
+        seenTimestamps = {}
     }
 
     Rectangle {
@@ -35,7 +109,7 @@ Item {
 
             // Başlık kısmı
             Text {
-                text: "Ölçüm Verileri"
+                text: "Ölçüm Verileri (Database)"
                 font.pixelSize: 24
                 font.family: "Consolas, monospace"
                 color: "#58a6ff"
@@ -47,14 +121,50 @@ Item {
                 Layout.fillWidth: true
 
                 Text {
-                    text: "Toplam Ölçüm: " + mainWindow.getMeasurementCount()
+                    text: "Toplam Kayıt: " + (mainWindow.getTotalMeasurementCount ? mainWindow.getTotalMeasurementCount() : "N/A") + " (Tabloda: " + measurements.length + ")"
                     font.family: "Consolas, monospace"
                     font.pointSize: 10
                     font.bold: true
                     color: "#58a6ff"
                 }
 
+                // Otomatik güncelleme durumu
+                Text {
+                    text: "Otomatik Güncelleme: " + (autoUpdateTimer.running ? "AÇIK" : "KAPALI")
+                    font.family: "Consolas, monospace"
+                    font.pointSize: 9
+                    color: autoUpdateTimer.running ? "#7ee787" : "#ff6b6b"
+                }
+
                 Item { Layout.fillWidth: true } // Spacer
+
+                // Otomatik güncelleme toggle butonu
+                Button {
+                    text: autoUpdateTimer.running ? "Dur" : "Başlat"
+                    width: 80
+                    height: 30
+                    background: Rectangle {
+                        color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
+                        radius: 6
+                        border.color: autoUpdateTimer.running ? "#ff6b6b" : "#7ee787"
+                        border.width: 1
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        font.family: "Consolas, monospace"
+                        font.pointSize: 9
+                        color: autoUpdateTimer.running ? "#ff6b6b" : "#7ee787"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: {
+                        if (autoUpdateTimer.running) {
+                            autoUpdateTimer.stop()
+                        } else {
+                            autoUpdateTimer.start()
+                        }
+                    }
+                }
 
                 Button {
                     text: "Yenile"
@@ -74,7 +184,10 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
-                    onClicked: loadMeasurements()
+                    onClicked: {
+                        clearMeasurements()
+                        loadMeasurements()
+                    }
                 }
 
                 Button {
@@ -96,7 +209,10 @@ Item {
                         verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: {
-                        mainWindow.clearMeasurements()
+                        if (mainWindow.clearDatabase) {
+                            mainWindow.clearDatabase()
+                        }
+                        clearMeasurements()
                         loadMeasurements()
                     }
                 }
@@ -182,7 +298,7 @@ Item {
 
                             Text {
                                 Layout.preferredWidth: 50
-                                text: modelData.id
+                                text: modelData.id || (index + 1)
                                 font.family: "Consolas, monospace"
                                 color: "#f0f6fc"
                                 horizontalAlignment: Text.AlignHCenter
@@ -190,7 +306,7 @@ Item {
 
                             Text {
                                 Layout.preferredWidth: 150
-                                text: modelData.timestamp
+                                text: modelData.timestamp || "N/A"
                                 font.family: "Consolas, monospace"
                                 color: "#f0f6fc"
                                 horizontalAlignment: Text.AlignHCenter
@@ -198,49 +314,109 @@ Item {
 
                             Text {
                                 Layout.preferredWidth: 100
-                                text: modelData.spo2
+                                text: modelData.spo2 || "N/A"
                                 font.family: "Consolas, monospace"
                                 horizontalAlignment: Text.AlignHCenter
-                                color: modelData.spo2 === "Geçersiz" ? "#ff6b6b" : "#7ee787"
+                                color: {
+                                    if (modelData.spo2 === "Geçersiz" || modelData.spo2 === "N/A") return "#ff6b6b"
+                                    var value = parseInt(modelData.spo2)
+                                    if (value < 95) return "#ff6b6b"
+                                    else if (value < 98) return "#ffa500"
+                                    else return "#7ee787"
+                                }
                             }
 
                             Text {
                                 Layout.preferredWidth: 100
-                                text: modelData.pulse
+                                text: modelData.pulse || "N/A"
                                 font.family: "Consolas, monospace"
                                 horizontalAlignment: Text.AlignHCenter
-                                color: modelData.pulse === "Geçersiz" ? "#ff6b6b" : "#7ee787"
+                                color: {
+                                    if (modelData.pulse === "Geçersiz" || modelData.pulse === "N/A") return "#ff6b6b"
+                                    var value = parseInt(modelData.pulse)
+                                    if (value < 60 || value > 100) return "#ffa500"
+                                    else return "#7ee787"
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // Geri dönüş butonu
-            Button {
-                id: backButton
-                width: 200
-                height: 40
+            // Durum bilgisi
+            Text {
+                text: measurements.length > 0 ? "Son güncelleme: " + new Date().toLocaleTimeString() : "Henüz veri yok"
+                font.family: "Consolas, monospace"
+                font.pointSize: 8
+                color: "#7ee787"
                 Layout.alignment: Qt.AlignHCenter
-                background: Rectangle {
-                    color: backButton.pressed ? "#238636" : (backButton.hovered ? "#2d333b" : "#21262d")
-                    radius: 6
-                    border.color: "#58a6ff"
-                    border.width: 1
+            }
+
+            // Butonlar - Yan yana
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 20
+
+                // Geri dönüş butonu
+                Button {
+                    id: backButton
+                    width: 200
+                    height: 40
+                    background: Rectangle {
+                        color: backButton.pressed ? "#238636" : (backButton.hovered ? "#2d333b" : "#21262d")
+                        radius: 6
+                        border.color: "#58a6ff"
+                        border.width: 1
+                    }
+                    contentItem: Text {
+                        text: "Ana Sayfaya Dön"
+                        font.family: "Consolas, monospace"
+                        font.pointSize: 11
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        anchors.fill: parent
+                    }
+                    onClicked: {
+                        console.log("navigateBack sinyali gönderildi.")
+                        // Timer'ları durdur
+                        autoUpdateTimer.stop()
+                        updateTimer.stop()
+                        page2.navigateBack()
+                    }
                 }
-                contentItem: Text {
-                    text: "Ana Sayfaya Dön"
-                    font.family: "Consolas, monospace"
-                    font.pointSize: 11
-                    font.bold: true
-                    color: "#58a6ff"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    anchors.fill: parent
-                }
-                onClicked: {
-                    console.log("navigateBack sinyali gönderildi.")
-                    page2.navigateBack()
+
+                // Veri akışı başlat butonu
+                Button {
+                    width: 200
+                    height: 35
+                    background: Rectangle {
+                        color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
+                        radius: 6
+                        border.color: "#58a6ff"
+                        border.width: 1
+                    }
+                    contentItem: Text {
+                        text: qsTr("Veri Akışını Başlat")
+                        font.family: "Consolas, monospace"
+                        font.pointSize: 10
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: {
+                        if (!mainWindow.serialConnected) {
+                            mainWindow.reconnectSerial()
+                            if (typeof root !== 'undefined') {
+                                root.isActive = true
+                            }
+                            console.log("Veri akışı başlatıldı.")
+                        } else {
+                            console.log("Veri akışı zaten aktif.")
+                        }
+                    }
                 }
             }
         }
