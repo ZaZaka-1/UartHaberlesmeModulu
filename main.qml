@@ -9,16 +9,26 @@ ApplicationWindow {
     title: qsTr("Advanced SPO2 Monitor")
     color: "#0a0e14"
 
+    property bool isActive: true
+        signal navigateToMain2()
+
+     property bool showMain2: false
+
+
     // C++ backend'den gelen veriler - mainWindow objesi üzerinden erişim
     // Bu kısım, uygulamanın C++ backend'i ile nasıl entegre olduğunu gösterir.
     // Gerçek bir uygulamada 'mainWindow' objesi C++ tarafından QML'e expose edilmelidir.
-    property string spo2Value: mainWindow ? mainWindow.spo2 : "Geçersiz"
-    property string pulseValue: mainWindow ? mainWindow.pulse : "Geçersiz"
+    property string spo2Value: mainWindow ? mainWindow.spo2 : "98"
+    property string pulseValue: mainWindow ? mainWindow.pulse : "72"
 
     // Backend sinyallerini dinle
     // C++'tan gelen spo2Changed ve pulseChanged sinyallerini yakalar
     Connections {
         target: mainWindow
+        function onNavigateBack() {
+            root.showMain2 = false
+            root.isActive = true   // ✅ Ana sayfa animasyonları tekrar BAŞLAR
+        }
         function onSpo2Changed() {
             root.spo2Value = mainWindow.spo2
         }
@@ -40,6 +50,30 @@ ApplicationWindow {
         var val = parseInt(pulseValue)
         return isNaN(val) ? 0 : val
     }
+
+    Loader {
+        id: pageLoader
+        anchors.fill: parent
+        source: root.showMain2 ? "main2.qml" : ""
+        active: root.showMain2
+
+        onLoaded: {
+            if (item) {
+                console.log("main2.qml yüklendi, sinyal dinleniyor...")
+                item.navigateBack.connect(function() {
+                    console.log("navigateBack sinyali geldi, ana sayfaya dönülüyor...")
+                    root.showMain2 = false
+                    root.isActive = true
+                })
+            }
+        }
+    }
+
+  Item {
+
+      anchors.fill: parent
+      visible: !root.showMain2  // Bu satır görünürlüğü kontrol eder
+
 
     // Ana içerik kutusu
     Rectangle {
@@ -96,7 +130,7 @@ ApplicationWindow {
 
                         SequentialAnimation on opacity {
                             loops: Animation.Infinite
-                            running: root.spo2Value !== "Geçersiz" && root.spo2Value !== "" // Sinyal varsa yanıp söner
+                            running: root.spo2Value !== "Geçersiz" && root.spo2Value !== "" && root.isActive // Sinyal varsa yanıp söner
                             PropertyAnimation { from: 1.0; to: 0.2; duration: 1000 }
                             PropertyAnimation { from: 0.2; to: 1.0; duration: 1000 }
                         }
@@ -119,7 +153,7 @@ ApplicationWindow {
 
                         Timer {
                             interval: 1000 // Her saniye güncellenir
-                            running: true
+                            running: root.isActive
                             repeat: true
                             onTriggered: timeText.text = Qt.formatDateTime(new Date(), "hh:mm:ss")
                         }
@@ -303,10 +337,10 @@ ApplicationWindow {
                 }
             }
 
-            // SpO2 Waveform Monitor
+            // SpO2 Waveform Monitor with Axes
             Rectangle {
                 width: parent.width
-                height: 200
+                height: 240  // Eksenler için yükseklik artırıldı
                 color: "#0d1117" // Çok koyu arka plan
                 radius: 8
                 border.color: "#30363d"
@@ -363,246 +397,356 @@ ApplicationWindow {
                         }
                     }
 
-                    // SpO2 Waveform Gösterimi
-                    Rectangle {
+                    // Grafik alanı (Y ekseni + Canvas + X ekseni)
+                    Row {
                         width: parent.width
-                        height: parent.height - 40 // Başlık yüksekliği çıkarılır
-                        color: "#010409" // En koyu arka plan
-                        radius: 4
+                        height: parent.height - 40
+                        spacing: 0
 
-                        Canvas {
-                                                    id: spo2WaveformCanvas
-                                                    anchors.fill: parent
-                                                    anchors.margins: 3
+                        // Y Ekseni (Sol taraf)
+                        Rectangle {
+                            id: yAxisArea
+                            width: 40
+                            height: parent.height - 25  // X ekseni için yer bırak
+                            color: "#010409"
 
-                                                    property real phase: 0 // Dalga kaydırma fazı
-                                                    property int spo2Value: root.spo2Numeric
-                                                    property int pulseRate: root.pulseNumeric > 0 ? root.pulseNumeric : 75 // Geçersizse varsayılan 75
-                                                    property bool hasValidData: root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
+                            Column {
+                                anchors.fill: parent
+                                spacing: 0
 
-                                                    onPaint: {
-                                                        var ctx = getContext("2d")
-                                                        ctx.clearRect(0, 0, width, height)
+                                // Y ekseni etiketleri (100% -> 0%)
+                                Repeater {
+                                    model: 6  // 100, 80, 60, 40, 20, 0
+                                    Rectangle {
+                                        width: yAxisArea.width
+                                        height: yAxisArea.height / 6
+                                        color: "transparent"
 
-                                                        // Medikal grid sistemi
-                                                        drawMedicalGrid(ctx)
+                                        Text {
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 5
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: (100 - index * 20) + "%"
+                                            font.family: "Consolas, monospace"
+                                            font.pointSize: 7
+                                            color: "#656d76"
+                                        }
 
-                                                        if (hasValidData) {
-                                                            // SpO2 Plethysmography waveform
-                                                            drawSpO2Waveform(ctx)
-                                                        } else {
-                                                            // Sinyal yoksa gösterge
-                                                            drawNoSignal(ctx)
-                                                        }
+                                        // Y ekseni çizgisi
+                                        Rectangle {
+                                            width: 3
+                                            height: 1
+                                            color: "#30363d"
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
+                                }
 
-                                                        // Ölçüm imleçleri
-                                                        drawMeasurementCursors(ctx)
-                                                    }
+                                // Y ekseni ana çizgisi
+                                Rectangle {
+                                    width: 1
+                                    height: parent.height
+                                    color: "#30363d"
+                                    anchors.right: parent.right
+                                }
+                            }
+                        }
 
-                                                    // Medikal grid çizimi fonksiyonu
-                                                    function drawMedicalGrid(ctx) {
-                                                        // İnce grid çizgileri (1mm, 5 piksel)
-                                                        ctx.strokeStyle = "#1c2128" // Koyu gri
-                                                        ctx.lineWidth = 0.3
+                        // Ana grafik alanı
+                        Column {
+                            width: parent.width - yAxisArea.width
+                            height: parent.height
 
-                                                        for (var i = 0; i < width; i += 5) {
-                                                            ctx.beginPath()
-                                                            ctx.moveTo(i, 0)
-                                                            ctx.lineTo(i, height)
-                                                            ctx.stroke()
-                                                        }
+                            // SpO2 Waveform Canvas
+                            Rectangle {
+                                width: parent.width
+                                height: parent.height - 25  // X ekseni için yer bırak
+                                color: "#010409"
 
-                                                        for (var j = 0; j < height; j += 5) {
-                                                            ctx.beginPath()
-                                                            ctx.moveTo(0, j)
-                                                            ctx.lineTo(width, j)
-                                                            ctx.stroke()
-                                                        }
+                                Canvas {
+                                    id: spo2WaveformCanvas
+                                    anchors.fill: parent
+                                    anchors.margins: 3
 
-                                                        // Kalın grid çizgileri (5mm, 25 piksel)
-                                                        ctx.strokeStyle = "#30363d" // Daha açık koyu gri
-                                                        ctx.lineWidth = 0.5
+                                    property real phase: 0
+                                    property int spo2Value: root.spo2Numeric
+                                    property int pulseRate: root.pulseNumeric > 0 ? root.pulseNumeric : 75
+                                    property bool hasValidData: root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
+                                    property real currentTime: 0  // Zaman takibi için
 
-                                                        for (var k = 0; k < width; k += 25) {
-                                                            ctx.beginPath()
-                                                            ctx.moveTo(k, 0)
-                                                            ctx.lineTo(k, height)
-                                                            ctx.stroke()
-                                                        }
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
 
-                                                        for (var l = 0; l < height; l += 25) {
-                                                            ctx.beginPath()
-                                                            ctx.moveTo(0, l)
-                                                            ctx.lineTo(width, l)
-                                                            ctx.lineTo(width, l)
-                                                            ctx.stroke()
-                                                        }
-                                                    }
+                                        // Medikal grid sistemi
+                                        drawMedicalGrid(ctx)
 
-                                                    function drawSpO2Waveform(ctx) {
-                                                        var amplitudeFactor = Math.max(0.3, spo2Value / 100.0);
-                                                        var amplitude = height * 0.4 * amplitudeFactor;
-                                                        var baseline = height * 0.6;
+                                        if (hasValidData) {
+                                            // SpO2 Plethysmography waveform
+                                            drawSpO2Waveform(ctx)
+                                        } else {
+                                            // Sinyal yoksa gösterge
+                                            drawNoSignal(ctx)
+                                        }
 
-                                                        var waveColor = spo2Value >= 95 ? "#58a6ff" :
-                                                                        spo2Value >= 90 ? "#ffa657" : "#ff7b72";
+                                        // Ölçüm imleçleri
+                                        drawMeasurementCursors(ctx)
+                                    }
 
-                                                        ctx.strokeStyle = waveColor;
-                                                        ctx.lineWidth = 2.5;
-                                                        ctx.beginPath();
+                                    // Medikal grid çizimi fonksiyonu
+                                    function drawMedicalGrid(ctx) {
+                                        // İnce grid çizgileri (1mm, 5 piksel)
+                                        ctx.strokeStyle = "#1c2128" // Koyu gri
+                                        ctx.lineWidth = 0.3
 
-                                                        // Daha fazla dalga için kısa periyot
-                                                        var period = width / (pulseRate / 60.0 * 12.0);
+                                        for (var i = 0; i < width; i += 5) {
+                                            ctx.beginPath()
+                                            ctx.moveTo(i, 0)
+                                            ctx.lineTo(i, height)
+                                            ctx.stroke()
+                                        }
 
-                                                        var xOffset = spo2WaveformCanvas.phase % period;
+                                        for (var j = 0; j < height; j += 5) {
+                                            ctx.beginPath()
+                                            ctx.moveTo(0, j)
+                                            ctx.lineTo(width, j)
+                                            ctx.stroke()
+                                        }
 
-                                                        for (var x = 0; x < width; x++) {
-                                                            var currentX = x + xOffset;
-                                                            var t = (currentX % period) / period;
+                                        // Kalın grid çizgileri (5mm, 25 piksel)
+                                        ctx.strokeStyle = "#30363d" // Daha açık koyu gri
+                                        ctx.lineWidth = 0.5
 
-                                                            var y;
+                                        for (var k = 0; k < width; k += 25) {
+                                            ctx.beginPath()
+                                            ctx.moveTo(k, 0)
+                                            ctx.lineTo(k, height)
+                                            ctx.stroke()
+                                        }
 
-                                                            // Temiz bifid plethysmography dalga formu - düz çizgiler
-                                                            if (t < 0.1) {
-                                                                // Düz baseline
-                                                                y = baseline;
-                                                            }
-                                                            else if (t < 0.15) {
-                                                                // Hızlı düz çıkış
-                                                                var rise = (t - 0.1) / 0.05;
-                                                                y = baseline - rise * amplitude;
-                                                            }
-                                                            else if (t < 0.2) {
-                                                                // İlk tepe (düz)
-                                                                y = baseline - amplitude;
-                                                            }
-                                                            else if (t < 0.28) {
-                                                                // Düz iniş - dikrotik çentiğe
-                                                                var fall1 = (t - 0.2) / 0.08;
-                                                                y = baseline - amplitude + fall1 * amplitude * 0.4;
-                                                            }
-                                                            else if (t < 0.32) {
-                                                                // Dikrotik çentik (düz düşük seviye)
-                                                                y = baseline - amplitude * 0.6;
-                                                            }
-                                                            else if (t < 0.37) {
-                                                                // İkinci tepe çıkış (düz)
-                                                                var rise2 = (t - 0.32) / 0.05;
-                                                                y = baseline - amplitude * 0.6 - rise2 * amplitude * 0.15;
-                                                            }
-                                                            else if (t < 0.42) {
-                                                                // İkinci tepe (düz)
-                                                                y = baseline - amplitude * 0.75;
-                                                            }
-                                                            else if (t < 0.55) {
-                                                                // Düz iniş baseline'a
-                                                                var fall2 = (t - 0.42) / 0.13;
-                                                                y = baseline - amplitude * 0.75 + fall2 * amplitude * 0.75;
-                                                            }
-                                                            else {
-                                                                // Düz baseline
-                                                                y = baseline;
-                                                            }
+                                        for (var l = 0; l < height; l += 25) {
+                                            ctx.beginPath()
+                                            ctx.moveTo(0, l)
+                                            ctx.lineTo(width, l)
+                                            ctx.stroke()
+                                        }
+                                    }
 
-                                                            // Düşük SpO2'de minimal bozulma
-                                                            if (spo2Value < 90 && spo2Value > 0) {
-                                                                var distortionFactor = (90 - spo2Value) / 30.0;
-                                                                y += (Math.random() - 0.5) * 1.0 * distortionFactor;
-                                                            } else if (spo2Value === 0) {
-                                                                y = baseline + (Math.random() - 0.5) * 2;
-                                                            }
+                                    function drawSpO2Waveform(ctx) {
+                                        var amplitudeFactor = Math.max(0.3, spo2Value / 100.0);
+                                        var amplitude = height * 0.4 * amplitudeFactor;
+                                        var baseline = height * 0.6;
 
-                                                            if (x === 0) {
-                                                                ctx.moveTo(x, y);
-                                                            } else {
-                                                                ctx.lineTo(x, y);
-                                                            }
-                                                        }
+                                        var waveColor = spo2Value >= 95 ? "#58a6ff" :
+                                                        spo2Value >= 90 ? "#ffa657" : "#ff7b72";
 
-                                                        ctx.stroke();
+                                        ctx.strokeStyle = waveColor;
+                                        ctx.lineWidth = 2.5;
+                                        ctx.beginPath();
 
-                                                        // Baseline çizgisi
-                                                        ctx.strokeStyle = "#6e7681";
-                                                        ctx.lineWidth = 1;
-                                                        ctx.setLineDash([2, 2]);
-                                                        ctx.beginPath();
-                                                        ctx.moveTo(0, baseline);
-                                                        ctx.lineTo(width, baseline);
-                                                        ctx.stroke();
-                                                        ctx.setLineDash([]);
+                                        // Daha fazla dalga için kısa periyot
+                                        var period = width / (pulseRate / 60.0 * 12.0);
 
-                                                        // Değer etiketi
-                                                        ctx.fillStyle = waveColor;
-                                                        ctx.font = "bold 14px Consolas, monospace";
-                                                        ctx.fillText("SpO₂: " + spo2Value + "%", 10, 25);
-                                                    }
+                                        var xOffset = spo2WaveformCanvas.phase % period;
 
-                                                    // Sinyal yoksa gösterge çizimi
-                                                    function drawNoSignal(ctx) {
-                                                        var baseline = height * 0.6
+                                        for (var x = 0; x < width; x++) {
+                                            var currentX = x + xOffset;
+                                            var t = (currentX % period) / period;
 
-                                                        // Düz çizgi (kesikli)
-                                                        ctx.strokeStyle = "#656d76"
-                                                        ctx.lineWidth = 1
-                                                        ctx.setLineDash([5, 5])
-                                                        ctx.beginPath()
-                                                        ctx.moveTo(0, baseline)
-                                                        ctx.lineTo(width, baseline)
-                                                        ctx.stroke()
-                                                        ctx.setLineDash([])
+                                            var y;
 
-                                                        // "NO SIGNAL" metni
-                                                        ctx.fillStyle = "#656d76"
-                                                        ctx.font = "bold 14px Consolas, monospace"
-                                                        ctx.fillText("NO SIGNAL", 10, 25)
-                                                    }
+                                            // Temiz bifid plethysmography dalga formu - düz çizgiler
+                                            if (t < 0.1) {
+                                                // Düz baseline
+                                                y = baseline;
+                                            }
+                                            else if (t < 0.15) {
+                                                // Hızlı düz çıkış
+                                                var rise = (t - 0.1) / 0.05;
+                                                y = baseline - rise * amplitude;
+                                            }
+                                            else if (t < 0.2) {
+                                                // İlk tepe (düz)
+                                                y = baseline - amplitude;
+                                            }
+                                            else if (t < 0.28) {
+                                                // Düz iniş - dikrotik çentiğe
+                                                var fall1 = (t - 0.2) / 0.08;
+                                                y = baseline - amplitude + fall1 * amplitude * 0.4;
+                                            }
+                                            else if (t < 0.32) {
+                                                // Dikrotik çentik (düz düşük seviye)
+                                                y = baseline - amplitude * 0.6;
+                                            }
+                                            else if (t < 0.37) {
+                                                // İkinci tepe çıkış (düz)
+                                                var rise2 = (t - 0.32) / 0.05;
+                                                y = baseline - amplitude * 0.6 - rise2 * amplitude * 0.15;
+                                            }
+                                            else if (t < 0.42) {
+                                                // İkinci tepe (düz)
+                                                y = baseline - amplitude * 0.75;
+                                            }
+                                            else if (t < 0.55) {
+                                                // Düz iniş baseline'a
+                                                var fall2 = (t - 0.42) / 0.13;
+                                                y = baseline - amplitude * 0.75 + fall2 * amplitude * 0.75;
+                                            }
+                                            else {
+                                                // Düz baseline
+                                                y = baseline;
+                                            }
 
-                                                    // Ölçüm imleçleri çizimi (kayan dikey çizgi ve kritik durum çerçevesi)
-                                                    function drawMeasurementCursors(ctx) {
-                                                        if (!hasValidData) return
+                                            // Düşük SpO2'de minimal bozulma
+                                            if (spo2Value < 90 && spo2Value > 0) {
+                                                var distortionFactor = (90 - spo2Value) / 30.0;
+                                                y += (Math.random() - 0.5) * 1.0 * distortionFactor;
+                                            } else if (spo2Value === 0) {
+                                                y = baseline + (Math.random() - 0.5) * 2;
+                                            }
 
-                                                        // Zaman cursoru (kayan dikey çizgi)
-                                                        var cursorX = (phase * 2) % width // Faz ile kayar
+                                            if (x === 0) {
+                                                ctx.moveTo(x, y);
+                                            } else {
+                                                ctx.lineTo(x, y);
+                                            }
+                                        }
 
-                                                        ctx.strokeStyle = "#f85149" // Kırmızı
-                                                        ctx.lineWidth = 1
-                                                        ctx.setLineDash([])
-                                                        ctx.beginPath()
-                                                        ctx.moveTo(cursorX, 0)
-                                                        ctx.lineTo(cursorX, height)
-                                                        ctx.stroke()
+                                        ctx.stroke();
 
-                                                        // Kritik durum overlay (SpO2 88'in altındaysa kırmızı çerçeve ve hafif kırmızı dolgu)
-                                                        if (spo2Value < 88 && spo2Value > 0) {
-                                                            ctx.fillStyle = "#f8514920" // Yarı şeffaf kırmızı dolgu
-                                                            ctx.fillRect(0, 0, width, height)
+                                        // Baseline çizgisi
+                                        ctx.strokeStyle = "#6e7681";
+                                        ctx.lineWidth = 1;
+                                        ctx.setLineDash([2, 2]);
+                                        ctx.beginPath();
+                                        ctx.moveTo(0, baseline);
+                                        ctx.lineTo(width, baseline);
+                                        ctx.stroke();
+                                        ctx.setLineDash([]);
 
-                                                            ctx.strokeStyle = "#f85149" // Kırmızı kenarlık
-                                                            ctx.lineWidth = 3
-                                                            ctx.setLineDash([15, 15]) // Kesikli kenarlık
-                                                            ctx.strokeRect(3, 3, width-6, height-6)
-                                                        }
-                                                    }
+                                        // Değer etiketi
+                                        ctx.fillStyle = waveColor;
+                                        ctx.font = "bold 14px Consolas, monospace";
+                                        ctx.fillText("SpO₂: " + spo2Value + "%", 10, 25);
+                                    }
 
-                                                    // Dalga formu animasyon zamanlayıcısı
-                                                    Timer {
-                                                        interval: 25 // Yaklaşık 40 FPS
-                                                        running: true
-                                                        repeat: true
-                                                        onTriggered: {
-                                                            if (spo2WaveformCanvas.hasValidData) {
-                                                                // Nabız hızına göre kaydırma hızı
-                                                                var speedMultiplier = Math.max(0.4, spo2WaveformCanvas.pulseRate / 75.0)
-                                                                spo2WaveformCanvas.phase += 6 * speedMultiplier  // Daha hızlı
-                                                            }
-                                                            // Değerleri güncelleyip yeniden çizim isteği gönderir
-                                                            spo2WaveformCanvas.spo2Value = root.spo2Numeric
-                                                            spo2WaveformCanvas.pulseRate = root.pulseNumeric > 0 ? root.pulseNumeric : 75
-                                                            spo2WaveformCanvas.hasValidData = root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
-                                                            spo2WaveformCanvas.requestPaint()
-                                                        }
-                                                    }
-                                                }
+                                    // Sinyal yoksa gösterge çizimi
+                                    function drawNoSignal(ctx) {
+                                        var baseline = height * 0.6
+
+                                        // Düz çizgi (kesikli)
+                                        ctx.strokeStyle = "#656d76"
+                                        ctx.lineWidth = 1
+                                        ctx.setLineDash([5, 5])
+                                        ctx.beginPath()
+                                        ctx.moveTo(0, baseline)
+                                        ctx.lineTo(width, baseline)
+                                        ctx.stroke()
+                                        ctx.setLineDash([])
+
+                                        // "NO SIGNAL" metni
+                                        ctx.fillStyle = "#656d76"
+                                        ctx.font = "bold 14px Consolas, monospace"
+                                        ctx.fillText("NO SIGNAL", 10, 25)
+                                    }
+
+                                    // Ölçüm imleçleri çizimi
+                                    function drawMeasurementCursors(ctx) {
+                                        if (!hasValidData) return
+
+                                        // Zaman cursoru (kayan dikey çizgi)
+                                        var cursorX = (phase * 2) % width
+
+                                        ctx.strokeStyle = "#f85149"
+                                        ctx.lineWidth = 1
+                                        ctx.setLineDash([])
+                                        ctx.beginPath()
+                                        ctx.moveTo(cursorX, 0)
+                                        ctx.lineTo(cursorX, height)
+                                        ctx.stroke()
+
+                                        // Kritik durum overlay
+                                        if (spo2Value < 88 && spo2Value > 0) {
+                                            ctx.fillStyle = "#f8514920"
+                                            ctx.fillRect(0, 0, width, height)
+
+                                            ctx.strokeStyle = "#f85149"
+                                            ctx.lineWidth = 3
+                                            ctx.setLineDash([15, 15])
+                                            ctx.strokeRect(3, 3, width-6, height-6)
+                                        }
+                                    }
+
+                                    // Dalga formu animasyon zamanlayıcısı
+                                    Timer {
+                                        interval: 25
+                                        running: root.isActive
+                                        repeat: true
+                                        onTriggered: {
+                                            if (spo2WaveformCanvas.hasValidData) {
+                                                var speedMultiplier = Math.max(0.4, spo2WaveformCanvas.pulseRate / 75.0)
+                                                spo2WaveformCanvas.phase += 6 * speedMultiplier
+                                                spo2WaveformCanvas.currentTime += 0.025  // Zaman artırımı
+                                            }
+                                            spo2WaveformCanvas.spo2Value = root.spo2Numeric
+                                            spo2WaveformCanvas.pulseRate = root.pulseNumeric > 0 ? root.pulseNumeric : 75
+                                            spo2WaveformCanvas.hasValidData = root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
+                                            spo2WaveformCanvas.requestPaint()
+                                        }
+                                    }
+                                }
+                            }
+
+                            // X Ekseni (Alt taraf)
+                            Rectangle {
+                                width: parent.width
+                                height: 25
+                                color: "#010409"
+
+                                Row {
+                                    anchors.fill: parent
+                                    spacing: 0
+
+                                    // X ekseni etiketleri (zaman)
+                                    Repeater {
+                                        model: 6  // 0s, 2s, 4s, 6s, 8s, 10s
+                                        Rectangle {
+                                            width: parent.width / 6
+                                            height: parent.height
+                                            color: "transparent"
+
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                anchors.top: parent.top
+                                                anchors.topMargin: 5
+                                                text: (index * 2) + "s"
+                                                font.family: "Consolas, monospace"
+                                                font.pointSize: 7
+                                                color: "#656d76"
+                                            }
+
+                                            // X ekseni çizgisi
+                                            Rectangle {
+                                                width: 1
+                                                height: 3
+                                                color: "#30363d"
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                anchors.top: parent.top
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // X ekseni ana çizgisi
+                                Rectangle {
+                                    width: parent.width
+                                    height: 1
+                                    color: "#30363d"
+                                    anchors.top: parent.top
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -643,20 +787,20 @@ ApplicationWindow {
                             radius: 11
                             color: { // Duruma göre arka plan rengi
                                 if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#21262d"
-                                return root.spo2Numeric >= 95 ? "#0f5132" : // Koyu yeşil
-                                       (root.spo2Numeric >= 90 ? "#664d03" : "#58151c") // Koyu turuncu, koyu kırmızı
+                                return root.spo2Numeric >= 95 ? "#0f5132" :
+                                       (root.spo2Numeric >= 90 ? "#664d03" : "#58151c")
                             }
                             border.color: { // Duruma göre kenarlık rengi
                                 if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#656d76"
-                                return root.spo2Numeric >= 95 ? "#7ee787" : // Açık yeşil
-                                       (root.spo2Numeric >= 90 ? "#ffa657" : "#ff7b72") // Açık turuncu, açık kırmızı
+                                return root.spo2Numeric >= 95 ? "#7ee787" :
+                                       (root.spo2Numeric >= 90 ? "#ffa657" : "#ff7b72")
                             }
                             border.width: 1
                             anchors.verticalCenter: parent.verticalCenter
 
                             Text {
                                 anchors.centerIn: parent
-                                text: { // Duruma göre metin
+                                text: {
                                     if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return qsTr("NO DATA")
                                     return root.spo2Numeric >= 95 ? qsTr("NORMAL") :
                                            (root.spo2Numeric >= 90 ? qsTr("HYPOXIC") : qsTr("CRITICAL"))
@@ -664,7 +808,7 @@ ApplicationWindow {
                                 font.family: "Consolas, monospace"
                                 font.pointSize: 8
                                 font.bold: true
-                                color: { // Duruma göre metin rengi
+                                color: {
                                     if (root.spo2Value === "Geçersiz" || root.spo2Value === "") return "#656d76"
                                     return root.spo2Numeric >= 95 ? "#7ee787" :
                                            (root.spo2Numeric >= 90 ? "#ffa657" : "#ff7b72")
@@ -677,7 +821,7 @@ ApplicationWindow {
                             width: 70
                             height: 22
                             radius: 11
-                            color: (root.spo2Numeric < 88 && root.spo2Numeric > 0) ? "#58151c" : "#0d1117" // Alarm varsa kırmızı, yoksa koyu
+                            color: (root.spo2Numeric < 88 && root.spo2Numeric > 0) ? "#58151c" : "#0d1117"
                             border.color: (root.spo2Numeric < 88 && root.spo2Numeric > 0) ? "#ff7b72" : "#30363d"
                             border.width: 1
                             anchors.verticalCenter: parent.verticalCenter
@@ -693,7 +837,7 @@ ApplicationWindow {
 
                             SequentialAnimation on opacity {
                                 loops: Animation.Infinite
-                                running: root.spo2Numeric < 88 && root.spo2Numeric > 0 // Alarm varsa yanıp söner
+                                running: root.spo2Numeric < 88 && root.spo2Numeric > 0 && root.isActive
                                 PropertyAnimation { from: 1.0; to: 0.3; duration: 400 }
                                 PropertyAnimation { from: 0.3; to: 1.0; duration: 400 }
                             }
@@ -754,7 +898,7 @@ ApplicationWindow {
 
                                 SequentialAnimation on opacity {
                                     loops: Animation.Infinite
-                                    running: root.spo2Value !== "Geçersiz" && root.spo2Value !== ""
+                                    running: root.spo2Value !== "Geçersiz" && root.spo2Value !== "" && root.isActive
                                     PropertyAnimation { from: 1.0; to: 0.2; duration: 1000 }
                                     PropertyAnimation { from: 0.2; to: 1.0; duration: 1000 }
                                 }
@@ -763,6 +907,48 @@ ApplicationWindow {
                     }
                 }
             }
+
         }
     }
+
+    Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottomMargin: 20
+            width: parent.width - 40
+            height: 50
+            color: "#21262d"
+            radius: 8
+            border.color: "#30363d"
+            border.width: 1
+            visible: !root.showMain2  // Sadece ana sayfada görünsün
+
+            Button {
+                anchors.centerIn: parent
+                width: parent.width - 20
+                height: 35
+                background: Rectangle {
+                    color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
+                    radius: 6
+                    border.color: "#58a6ff"
+                    border.width: 1
+                }
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("Veri Tablosu")
+                    font.family: "Consolas, monospace"
+                    font.pointSize: 11
+                    font.bold: true
+                    color: "#58a6ff"
+                }
+                onClicked: {
+                    console.log("Butona tıklandı!")
+                    root.isActive = false
+                    root.showMain2 = true
+                    console.log("showMain2:", root.showMain2)
+                }
+            }
+        }
+ }
 }
+

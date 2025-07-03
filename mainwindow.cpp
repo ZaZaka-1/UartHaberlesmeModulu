@@ -1,6 +1,6 @@
+// mainwindow.cpp
 #include "mainwindow.h"
 #include <QDir>
-
 #include <QDebug>
 
 MainWindow::MainWindow(QObject *parent)
@@ -23,6 +23,7 @@ MainWindow::MainWindow(QObject *parent)
     connect(serial, &QSerialPort::readyRead, this, &MainWindow::readData);
     connect(serial, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
 
+    // İlk bağlantı denemesi
     openSerialPort();
 
     connectionTimer = new QTimer(this);
@@ -39,6 +40,7 @@ MainWindow::MainWindow(QObject *parent)
 
     packetCommands = createIndividualCommands();
 
+    // Port açık değilse bile timer'ları başlat
     connectionTimer->start(1000);
 }
 
@@ -48,37 +50,66 @@ MainWindow::~MainWindow()
         serial->close();
 }
 
+
 void MainWindow::openSerialPort()
 {
     if (!serial->open(QIODevice::ReadWrite)) {
-        qWarning() << "Seri port açılamadı:" << serial->errorString();
+        // Sadece ilk başta hata mesajı göster
+        static bool firstTry = true;
+        if (firstTry) {
+            qDebug() << "Seri port açılamadı:" << serial->errorString();
+            qDebug() << "Program port olmadan da çalışmaya devam edecek...";
+            firstTry = false;
+        }
+        emit serialConnectedChanged();
+        return; // Yeniden deneme yapma
     } else {
-        qDebug() << "Seri port açıldı.";
+        qDebug() << "Seri port başarıyla açıldı.";
+        emit serialConnectedChanged();
     }
+}
+
+void MainWindow::tryReconnect()
+{
+    qDebug() << "Yeniden bağlanma denemesi yapılıyor...";
+    openSerialPort();
+}
+
+bool MainWindow::isSerialConnected() const {
+    return serial && serial->isOpen();
 }
 
 void MainWindow::sendConnectionSequence()
 {
-    if (connectionSent || !serial->isOpen())
+    if (connectionSent || !serial->isOpen()) {
+        qDebug() << "Bağlantı dizisi gönderilemiyor - Port kapalı veya zaten gönderildi";
         return;
+    }
 
     QByteArray handshake = QByteArray::fromHex("BF5FFF");
-    serial->write(handshake);
-    serial->flush();
-    serial->waitForBytesWritten(1000);
+    if (serial->isOpen()) {
+        serial->write(handshake);
+        serial->flush();
+        serial->waitForBytesWritten(1000);
+        qDebug() << "Handshake gönderildi";
+    }
 
     connectionSent = true;
     connectionTimer->stop();
 
     QTimer::singleShot(2000, this, [this]() {
-        dataRequestTimer->start(5000);
+        if (serial->isOpen()) {
+            dataRequestTimer->start(5000);
+        }
     });
 }
 
 void MainWindow::startSequentialRequests()
 {
-    if (!serial->isOpen())
+    if (!serial->isOpen()) {
+        qDebug() << "Sequential request başlatılamıyor - Port kapalı";
         return;
+    }
 
     currentPacketIndex = 0;
     sendNextPacket();
@@ -86,8 +117,12 @@ void MainWindow::startSequentialRequests()
 
 void MainWindow::sendNextPacket()
 {
-    if (!serial->isOpen() || currentPacketIndex >= packetCommands.size())
+    if (!serial->isOpen() || currentPacketIndex >= packetCommands.size()) {
+        if (!serial->isOpen()) {
+            qDebug() << "Packet gönderilemiyor - Port kapalı";
+        }
         return;
+    }
 
     QByteArray packet = packetCommands[currentPacketIndex];
     serial->write(packet);
@@ -141,7 +176,6 @@ void MainWindow::parseBufferedData()
     while (buffer.size() >= 4) {
         int headerIndex = buffer.indexOf(QByteArray::fromHex("AA55"));
         if (headerIndex == -1) {
-            // Sadece son 1 byte bırak ki olası yarım header kaçmasın
             if (buffer.size() > 1)
                 buffer.remove(0, buffer.size() - 1);
             return;
@@ -200,7 +234,7 @@ void MainWindow::parsePacketByCode(uint8_t code, const QByteArray &payload)
             float t1 = rawT1 < 5000 ? rawT1 / 10.0 : 0.0;
             float t2 = rawT2 < 5000 ? rawT2 / 10.0 : 0.0;
 
-            qDebug().noquote() << QString(" ERT ➤ HR: %1 bpm | RR: %2 rpm | T1: %3 °C | T2: %4 °C")
+            qDebug().noquote() << QString(" ERT ➔ HR: %1 bpm | RR: %2 rpm | T1: %3 °C | T2: %4 °C")
                                       .arg(hr).arg(rr).arg(t1, 0, 'f', 1).arg(t2, 0, 'f', 1);
         }
         break;
@@ -224,9 +258,8 @@ void MainWindow::parsePacketByCode(uint8_t code, const QByteArray &payload)
 
             insertMeasurement(spo2Str, pulseStr);
 
-            qDebug().noquote() << QString(" SPO2 ➤ SpO2: %1 %% | Pulse: %2 bpm")
+            qDebug().noquote() << QString(" SPO2 ➔ SpO2: %1 %% | Pulse: %2 bpm")
                                       .arg(spo2Str).arg(pulseStr);
-
         }
         break;
     }
@@ -240,17 +273,31 @@ void MainWindow::handleError(QSerialPort::SerialPortError error)
     if (error == QSerialPort::NoError)
         return;
 
-    qWarning() << "Serial Port Hatası:" << error << "-" << serial->errorString();
+    // Sadece ilk hatayı logla, sonrasında spam yapma
+    if (!errorLogged) {
+        qDebug() << "Serial Port Hatası:" << error << "-" << serial->errorString();
+        qDebug() << "Program port olmadan devam edecek...";
+        errorLogged = true;
+    }
 
-    serial->close();
+    if (serial->isOpen()) {
+        serial->close();
+    }
+
+    emit serialConnectedChanged();
     connectionSent = false;
-    QTimer::singleShot(2000, this, &MainWindow::openSerialPort);
+
+    // Timer'ları durdur
+    if (connectionTimer && connectionTimer->isActive()) {
+        connectionTimer->stop();
+    }
+    if (dataRequestTimer && dataRequestTimer->isActive()) {
+        dataRequestTimer->stop();
+    }
+    if (sequentialTimer && sequentialTimer->isActive()) {
+        sequentialTimer->stop();
+    }
 }
-
-
-
-
-//SQLKISMI
 
 void MainWindow::initDatabase()
 {
@@ -275,9 +322,7 @@ void MainWindow::initDatabase()
     } else {
         qDebug() << "Veritabanı ve tablo hazır.";
     }
-
 }
-
 
 void MainWindow::insertMeasurement(const QString &spo2, const QString &pulse)
 {
@@ -297,6 +342,105 @@ void MainWindow::insertMeasurement(const QString &spo2, const QString &pulse)
         qWarning() << "Veri eklenemedi:" << query.lastError().text();
     } else {
         qDebug() << "Veri eklendi:" << timestamp << spo2 << pulse;
+
     }
 }
 
+// Manuel yeniden bağlanma fonksiyonu (QML'den çağırılabilir)
+void MainWindow::reconnectSerial()
+{
+    qDebug() << "Manuel yeniden bağlanma deneniyor...";
+
+    if (serial->isOpen()) {
+        serial->close();
+    }
+
+    // Hata bayrağını sıfırla
+    errorLogged = false;
+    connectionSent = false;
+
+    openSerialPort();
+
+    if (serial->isOpen()) {
+        // Bağlantı başarılıysa timer'ları yeniden başlat
+        connectionTimer->start(1000);
+    }
+}
+
+QVariantList MainWindow::getMeasurements()
+{
+    QVariantList measurements;
+    if (!db.isOpen()) {
+        qWarning() << "Veritabanı bağlantısı yok";
+        return measurements;
+    }
+    QSqlQuery query;
+    query.prepare("SELECT id, timestamp, spo2, pulse FROM measurements ORDER BY timestamp DESC");
+    if (!query.exec()) {
+        qWarning() << "Ölçümler alınamadı:" << query.lastError().text();
+        return measurements;
+    }
+    while (query.next()) {
+        QVariantMap measurement;
+        measurement["id"] = query.value("id").toInt();
+        measurement["timestamp"] = query.value("timestamp").toString();
+        measurement["spo2"] = query.value("spo2").toString();
+        measurement["pulse"] = query.value("pulse").toString();
+        measurements.append(measurement);
+    }
+    return measurements;
+}
+QVariantList MainWindow::getRecentMeasurements(int limit)
+{
+    QVariantList measurements;
+    if (!db.isOpen()) {
+        qWarning() << "Veritabanı bağlantısı yok";
+        return measurements;
+    }
+    QSqlQuery query;
+    query.prepare("SELECT id, timestamp, spo2, pulse FROM measurements ORDER BY timestamp DESC LIMIT :limit");
+    query.bindValue(":limit", limit);
+    if (!query.exec()) {
+        qWarning() << "Son ölçümler alınamadı:" << query.lastError().text();
+        return measurements;
+    }
+    while (query.next()) {
+        QVariantMap measurement;
+        measurement["id"] = query.value("id").toInt();
+        measurement["timestamp"] = query.value("timestamp").toString();
+        measurement["spo2"] = query.value("spo2").toString();
+        measurement["pulse"] = query.value("pulse").toString();
+        measurements.append(measurement);
+    }
+    return measurements;
+}
+void MainWindow::clearMeasurements()
+{
+    if (!db.isOpen()) {
+        qWarning() << "Veritabanı bağlantısı yok";
+        return;
+    }
+    QSqlQuery query;
+    if (!query.exec("DELETE FROM measurements")) {
+        qWarning() << "Ölçümler temizlenemedi:" << query.lastError().text();
+    } else {
+        qDebug() << "Tüm ölçümler temizlendi";
+        emit measurementAdded(); // Tabloyu güncellemek için sinyal gönder
+    }
+}
+int MainWindow::getMeasurementCount()
+{
+    if (!db.isOpen()) {
+        qWarning() << "Veritabanı bağlantısı yok";
+        return 0;
+    }
+    QSqlQuery query;
+    if (!query.exec("SELECT COUNT(*) FROM measurements")) {
+        qWarning() << "Ölçüm sayısı alınamadı:" << query.lastError().text();
+        return 0;
+    }
+    if (query.next()) {
+        return query.value(0).toInt();
+    }
+    return 0;
+}
