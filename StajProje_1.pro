@@ -15,10 +15,12 @@ QML_IMPORT_MAJOR_VERSION = 1
 
 SOURCES += \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    serialcommunication.cpp
 
 HEADERS += \
-    mainwindow.h
+    mainwindow.h \
+    serialcommunication.h
 
 RESOURCES += \
     Resource.qrc

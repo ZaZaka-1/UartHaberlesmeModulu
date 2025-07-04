@@ -9,9 +9,13 @@ Item {
     property var measurements: []
     property bool updatePending: false
     property var seenTimestamps: ({})  // Görülen timestamp'leri takip etmek için
+    property int lastDatabaseCount: 0  // Son database kayıt sayısı
 
     Component.onCompleted: {
+        console.log("main2.qml yüklendi - verileri yükleniyor...")
         loadMeasurements()
+        // Sayfa açıldığında otomatik güncellemeyi başlat
+        autoUpdateTimer.start()
     }
 
     // Yeni ölçüm eklendiğinde tabloyu güncelle - ancak yavaşlatılmış
@@ -51,15 +55,25 @@ Item {
     }
 
     function loadMeasurements() {
-        // Database'den son verileri al
-        var allMeasurements = mainWindow.getMeasurementsFromDatabase(200) // Son 200 ölçüm
+        // Database'den tüm verileri al
+        var allMeasurements = mainWindow.getMeasurementsFromDatabase(1000) // Daha fazla kayıt al
 
         if (!allMeasurements || allMeasurements.length === 0) {
             console.log("Database'den veri alınamadı")
             return
         }
 
-        // Yeni verileri filtrele
+        // Mevcut database kayıt sayısını kontrol et
+        var currentDatabaseCount = mainWindow.getTotalMeasurementCount ? mainWindow.getTotalMeasurementCount() : 0
+
+        // Eğer database'de yeni kayıt yoksa ve mevcut listede veri varsa güncelleme yapma
+        if (currentDatabaseCount === lastDatabaseCount && measurements.length > 0) {
+            return
+        }
+
+        lastDatabaseCount = currentDatabaseCount
+
+        // Yeni verileri filtrele (aynı saniyedeki verileri engelle)
         var newMeasurements = []
 
         for (var i = 0; i < allMeasurements.length; i++) {
@@ -78,16 +92,19 @@ Item {
 
         // Yeni verileri var ise listenin başına ekle (en yeni veriler üstte)
         if (newMeasurements.length > 0) {
+            console.log("Yeni " + newMeasurements.length + " veri eklendi")
+
             // Tarihe göre ters sırala (en yeni üstte)
             newMeasurements.sort(function(a, b) {
                 return new Date(b.timestamp) - new Date(a.timestamp)
             })
 
+            // Yeni verileri mevcut verilerin başına ekle
             measurements = newMeasurements.concat(measurements)
 
-            // Maksimum 500 kayıt tut (performans için)
-            if (measurements.length > 500) {
-                measurements = measurements.slice(0, 500)
+            // Maksimum 1000 kayıt tut (performans için)
+            if (measurements.length > 1000) {
+                measurements = measurements.slice(0, 1000)
             }
         }
     }
@@ -96,6 +113,15 @@ Item {
     function clearMeasurements() {
         measurements = []
         seenTimestamps = {}
+        lastDatabaseCount = 0
+        console.log("Veriler temizlendi")
+    }
+
+    // Tüm verileri yeniden yükle
+    function refreshAllData() {
+        clearMeasurements()
+        loadMeasurements()
+        console.log("Tüm veriler yeniden yüklendi")
     }
 
     Rectangle {
@@ -160,8 +186,10 @@ Item {
                     onClicked: {
                         if (autoUpdateTimer.running) {
                             autoUpdateTimer.stop()
+                            console.log("Otomatik güncelleme durduruldu")
                         } else {
                             autoUpdateTimer.start()
+                            console.log("Otomatik güncelleme başlatıldı")
                         }
                     }
                 }
@@ -185,8 +213,7 @@ Item {
                         verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: {
-                        clearMeasurements()
-                        loadMeasurements()
+                        refreshAllData()
                     }
                 }
 
@@ -211,9 +238,9 @@ Item {
                     onClicked: {
                         if (mainWindow.clearDatabase) {
                             mainWindow.clearDatabase()
+                            console.log("Database temizlendi")
                         }
                         clearMeasurements()
-                        loadMeasurements()
                     }
                 }
             }
@@ -284,6 +311,7 @@ Item {
                 ListView {
                     id: measurementList
                     model: measurements
+                    clip: true  // Performans için
 
                     delegate: Rectangle {
                         width: measurementList.width
@@ -379,7 +407,7 @@ Item {
                         anchors.fill: parent
                     }
                     onClicked: {
-                        console.log("navigateBack sinyali gönderildi.")
+                        console.log("Ana sayfaya dönülüyor - timer'lar durduruluyor")
                         // Timer'ları durdur
                         autoUpdateTimer.stop()
                         updateTimer.stop()

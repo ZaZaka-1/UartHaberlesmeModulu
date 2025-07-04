@@ -2,9 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QObject>
-#include <QSerialPort>
 #include <QByteArray>
-#include <QTimer>
 #include <QAbstractListModel>
 #include <QVariantMap>
 
@@ -13,6 +11,9 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDateTime>
+
+// Forward declaration
+class SerialCommunication;
 
 class MainWindow : public QObject
 {
@@ -55,47 +56,23 @@ public slots:
     void reconnectSerial();  // QML'den çağırılabilir
 
 private slots:
-    void readData();
-    void handleError(QSerialPort::SerialPortError error);
-    void sendConnectionSequence();
-    void startSequentialRequests();
-    void sendNextPacket();
-    void tryReconnect();  // Bu satırı ekleyin
+    void handleSpo2PulseData(const QString &spo2, const QString &pulse);
+    void handleErtData(uint8_t hr, uint8_t rr, float t1, float t2);
 
 private:
-    bool errorLogged = false;
-
-    void openSerialPort();
-    QList<QByteArray> createIndividualCommands();
-    QByteArray createSMMPacket(uint8_t code, const QByteArray &data);
-    void parseBufferedData();
-    void parsePacketByCode(uint8_t code, const QByteArray &payload);
-
-    QDateTime lastInsertTime;
-
-    QSerialPort *serial;
-    QByteArray buffer;
+    SerialCommunication *serialComm;
 
     QString m_spo2;
     QString m_pulse;
 
-    QTimer *connectionTimer;
-    QTimer *dataRequestTimer;
-    QTimer *sequentialTimer;
-
-    QList<QByteArray> packetCommands;
-    bool connectionSent;
-    int currentPacketIndex;
+    QDateTime lastInsertTime;
+    QDateTime lastSaveTime;
 
     //SQL KISMI
     QSqlDatabase db;
 
     void initDatabase();
     void insertMeasurement(const QString &spo2, const QString &pulse);
-
-private:
-    // Mevcut değişkenlerinizin yanına ekleyin
-    QDateTime lastSaveTime;
 };
 
 #endif // MAINWINDOW_H
