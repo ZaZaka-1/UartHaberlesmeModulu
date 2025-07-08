@@ -22,8 +22,13 @@ class MainWindow : public QObject
     Q_PROPERTY(QString pulse READ pulse NOTIFY pulseChanged)
     Q_PROPERTY(bool serialConnected READ isSerialConnected NOTIFY serialConnectedChanged)
 
+    Q_PROPERTY(QVariantList waveformData READ waveformData NOTIFY waveformDataChanged)
+
+
     //main2.qml için
 public:
+    QVariantList waveformData() const { return m_waveformData; }
+
     Q_INVOKABLE QVariantList getMeasurements(); // Tüm ölçümleri al
     Q_INVOKABLE QVariantList getRecentMeasurements(int limit = 50); // Son N ölçümü al
     Q_INVOKABLE void clearMeasurements(); // Tüm ölçümleri temizle
@@ -34,6 +39,9 @@ public slots:
 
 signals:
     void measurementAdded();
+
+    void waveformDataChanged();
+    void realTimeWaveformPoint(int amplitude);
 
 public:
     explicit MainWindow(QObject *parent = nullptr);
@@ -53,14 +61,24 @@ signals:
     void serialConnectedChanged();
 
 public slots:
+    void onWaveformSampleReceived();
     void reconnectSerial();  // QML'den çağırılabilir
 
 private slots:
+
+    void handleWaveformData(uint8_t waveformValue);
+
+
     void handleSpo2PulseData(const QString &spo2, const QString &pulse);
     void handleErtData(uint8_t hr, uint8_t rr, float t1, float t2);
 
 private:
+    QVariantList m_waveformData;
+    static const int MAX_WAVEFORM_POINTS = 200;
+
     SerialCommunication *serialComm;
+
+    int m_waveformSample = 0;
 
     QString m_spo2;
     QString m_pulse;

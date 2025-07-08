@@ -235,19 +235,34 @@ void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payl
     }
     case 0x15: {
         if (payload.size() >= 6) {
+            // ✅ 1. Waveform ham verisini oku
+            uint8_t waveformRaw = static_cast<uint8_t>(payload[1]);
+
+            // ✅ 2. SpO2 ve pulse değerlerini oku
             uint8_t spo2 = static_cast<uint8_t>(payload[3]);
             uint16_t pulse = (static_cast<uint8_t>(payload[4]) << 8) | static_cast<uint8_t>(payload[5]);
 
             QString spo2Str = (spo2 == 0x7F || spo2 > 100) ? "Geçersiz" : QString::number(spo2);
             QString pulseStr = (pulse > 240 || pulse == 0 || pulse == 0xFFFF) ? "Geçersiz" : QString::number(pulse);
 
-            qDebug().noquote() << QString(" SPO2 ➔ SpO2: %1 %% | Pulse: %2 bpm")
-                                      .arg(spo2Str).arg(pulseStr);
+            qDebug().noquote() << QString("SPO2 (0x15) ➔ SpO2: %1 %% | Pulse: %2 bpm | Waveform: %3")
+                                      .arg(spo2Str)
+                                      .arg(pulseStr)
+                                      .arg(waveformRaw);
 
+            // ✅ 4. Yeni: waveform örneğini sakla ve bildir
+            m_waveformSample = waveformRaw;
+            emit waveformSampleReceived();
+
+            // ✅ 3. Waveform verisini QML'e gönder
+            emit waveformDataReceived(waveformRaw);
+
+            // ✅ 4. SpO2 ve pulse verilerini gönder
             emit spo2PulseData(spo2Str, pulseStr);
         }
         break;
     }
+
     default:
         break;
     }

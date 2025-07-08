@@ -19,10 +19,42 @@ MainWindow::MainWindow(QObject *parent)
     // Sinyal-slot bağlantıları
     connect(serialComm, &SerialCommunication::spo2PulseData,
             this, &MainWindow::handleSpo2PulseData);
+
     connect(serialComm, &SerialCommunication::connectionStatusChanged,
             this, &MainWindow::serialConnectedChanged);
+
     connect(serialComm, &SerialCommunication::ertData,
             this, &MainWindow::handleErtData);
+
+    connect(serialComm, &SerialCommunication::waveformDataReceived,
+            this, &MainWindow::handleWaveformData);
+
+    connect(serialComm, &SerialCommunication::waveformSampleReceived, this, [this]() {
+        this->m_waveformSample = serialComm->waveformSample();  // this-> ekle
+        emit realTimeWaveformPoint(this->m_waveformSample);
+    });
+}
+
+
+void MainWindow::handleWaveformData(uint8_t waveformValue)
+{
+    // Waveform verisini listeye ekle
+    QVariantMap dataPoint;
+    dataPoint["amplitude"] = waveformValue;
+    dataPoint["timestamp"] = QDateTime::currentMSecsSinceEpoch();
+
+    m_waveformData.append(dataPoint);
+
+    // Maksimum nokta sayısını sınırla
+    if (m_waveformData.size() > MAX_WAVEFORM_POINTS) {
+        m_waveformData.removeFirst();
+    }
+
+    // Sinyalleri yay
+    emit waveformDataChanged();
+    emit realTimeWaveformPoint(waveformValue);
+
+    qDebug() << "Waveform data received:" << waveformValue;
 }
 
 MainWindow::~MainWindow()
@@ -272,4 +304,10 @@ void MainWindow::clearDatabase()
         qDebug() << "Tüm veriler silindi";
         emit measurementAdded(); // QML tarafı tabloyu güncellesin
     }
+}
+
+void MainWindow::onWaveformSampleReceived()
+{
+    m_waveformSample = serialComm->waveformSample();  // Veya uygun getter fonksiyonu
+    emit realTimeWaveformPoint(m_waveformSample);
 }

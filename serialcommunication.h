@@ -12,6 +12,7 @@ class SerialCommunication : public QObject
     Q_OBJECT
 
 public:
+    int waveformSample() const { return m_waveformSample; }
     explicit SerialCommunication(QObject *parent = nullptr);
     ~SerialCommunication();
 
@@ -22,10 +23,14 @@ public slots:
     void stopDataStream();
 
 signals:
+     void waveformSampleReceived();
     void dataReceived(uint8_t code, const QByteArray &payload);
     void connectionStatusChanged(bool connected);
     void spo2PulseData(const QString &spo2, const QString &pulse);
     void ertData(uint8_t hr, uint8_t rr, float t1, float t2);
+
+    // ✅ Yeni sinyal: Waveform verisi için
+    void waveformDataReceived(uint8_t waveformValue);
 
 private slots:
     void readData();
@@ -35,6 +40,7 @@ private slots:
     void sendNextPacket();
 
 private:
+
     void openSerialPort();
     QList<QByteArray> createIndividualCommands();
     QByteArray createSMMPacket(uint8_t code, const QByteArray &data);
@@ -43,7 +49,7 @@ private:
 
     QSerialPort *serial;
     QByteArray buffer;
-
+    uint8_t m_waveformSample = 0;
     QTimer *connectionTimer;
     QTimer *dataRequestTimer;
     QTimer *sequentialTimer;
