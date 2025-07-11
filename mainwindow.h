@@ -44,6 +44,8 @@ signals:
     void realTimeWaveformPoint(int amplitude);
 
 public:
+    Q_INVOKABLE void sendSpo2SettingsFromQml(int frequency, int mode, int averaging);
+
     explicit MainWindow(QObject *parent = nullptr);
     ~MainWindow();
 
@@ -65,6 +67,7 @@ public slots:
     void reconnectSerial();  // QML'den çağırılabilir
 
 private slots:
+    void sendSpo2Settings(int frequency, int mode, int averaging);
 
     void handleWaveformData(uint8_t waveformValue);
 

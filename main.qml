@@ -11,6 +11,7 @@ ApplicationWindow {
 
     property bool isActive: true
     property bool showMain2: false
+    property bool showSettings: false  // ✅ Settings sayfası için property eklendi
     property string spo2Value: mainWindow ? mainWindow.spo2 : "98"
     property string pulseValue: mainWindow ? mainWindow.pulse : "72"
     property int spo2Numeric: parseInt(spo2Value) || 0
@@ -26,6 +27,7 @@ ApplicationWindow {
         target: mainWindow
         function onNavigateBack() {
             root.showMain2 = false
+            root.showSettings = false  // ✅ Settings'den geri dönüş
             root.isActive = true
         }
         function onSpo2Changed() {
@@ -50,6 +52,7 @@ ApplicationWindow {
             }
     }
 
+    // ✅ Main2 için Loader
     Loader {
         id: pageLoader
         anchors.fill: parent
@@ -65,9 +68,48 @@ ApplicationWindow {
         }
     }
 
+    // Settings için Loader
+    Loader {
+        id: settingsLoader
+        anchors.fill: parent
+        source: root.showSettings ? "settings.qml" : ""
+        active: root.showSettings
+
+        onActiveChanged: {
+            console.log("settingsLoader aktif durumu değişti:", active)
+        }
+
+        onSourceChanged: {
+            console.log("settingsLoader source değişti:", source)
+        }
+
+        onStatusChanged: {
+            console.log("settingsLoader status değişti:", status)
+            if (status === Loader.Error) {
+                console.log("❌ Settings dosyası yüklenemedi!")
+            } else if (status === Loader.Ready) {
+                console.log("✅ Settings dosyası başarıyla yüklendi")
+            }
+        }
+
+        onLoaded: {
+            console.log("Settings sayfası yüklendi")
+            if (item) {
+                console.log("Settings item mevcut")
+                item.navigateBack.connect(function() {
+                    console.log("Settings'den geri dönüş sinyali alındı")
+                    root.showSettings = false
+                    root.isActive = true
+                })
+            } else {
+                console.log("❌ Settings item null!")
+            }
+        }
+    }
+
     Item {
         anchors.fill: parent
-        visible: !root.showMain2
+        visible: !root.showMain2 && !root.showSettings  // ✅ Her iki sayfa için görünürlük kontrolü
 
         Rectangle {
             anchors.fill: parent
@@ -329,11 +371,12 @@ ApplicationWindow {
                                     waveformData.shift() // İlk elemanı sil
                                 }
 
-                                // Veri alma durumunu güncelle
+                               /* // Veri alma durumunu güncelle
                                 isReceivingData = true
                                 lastDataTime = Date.now()
 
                                 console.log("Waveform dizisi uzunluğu:", waveformData.length)
+                               */
 
                                 // Canvas'ı yeniden çiz
                                 requestPaint()
@@ -519,7 +562,6 @@ ApplicationWindow {
                     }
                 }
 
-                // Butonlar
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 20
@@ -552,8 +594,6 @@ ApplicationWindow {
                         }
                     }
 
-
-
                     Button {
                         width: 120
                         height: 35
@@ -577,6 +617,33 @@ ApplicationWindow {
                             }
                             root.isActive = false
                             root.showMain2 = true
+                        }
+                    }
+
+                    Button {
+                        width: 120
+                        height: 35
+                        background: Rectangle {
+                            color: parent.pressed ? "#7c3aed" : "#21262d"
+                            radius: 6
+                            border.color: "#58a6ff"
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: "Ayarlar"
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 10
+                            color: "#58a6ff"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: {
+                            console.log("Settings butonu tıklandı!")
+                            console.log("Önceki showSettings değeri:", root.showSettings)
+                            root.showSettings = true
+                            console.log("Yeni showSettings değeri:", root.showSettings)
+                            console.log("settingsLoader aktif mi:", settingsLoader.active)
+                            console.log("settingsLoader source:", settingsLoader.source)
                         }
                     }
                 }

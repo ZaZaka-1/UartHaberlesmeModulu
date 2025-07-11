@@ -151,6 +151,7 @@ QByteArray SerialCommunication::createSMMPacket(uint8_t code, const QByteArray &
         checksum += static_cast<uint8_t>(byte);
     }
     packet.append(checksum);
+
     return packet;
 }
 
@@ -207,13 +208,16 @@ void SerialCommunication::parseBufferedData()
 
 void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payload)
 {
-    QString hexDump;
-    for (uint8_t byte : payload) {
-        hexDump += QString("%1 ").arg(byte, 2, 16, QLatin1Char('0')).toUpper();
+    // Bu kodlar için debug mesajını kaldır: 0x02, 0x15, 0x0B, 0x01, 0x06, 0x05, 0x07, 0x03
+    if (code != 0x02 && code != 0x15 && code != 0x0B && code != 0x01 && code != 0x06 && code != 0x05 && code != 0x07 && code != 0x03) {
+        QString hexDump;
+        for (uint8_t byte : payload) {
+            hexDump += QString("%1 ").arg(byte, 2, 16, QLatin1Char('0')).toUpper();
+        }
+        qDebug().noquote() << QString(" Code: 0x%1 Payload: %2")
+                                  .arg(code, 2, 16, QLatin1Char('0')).toUpper()
+                                  .arg(hexDump.trimmed());
     }
-    qDebug().noquote() << QString(" Code: 0x%1 Payload: %2")
-                              .arg(code, 2, 16, QLatin1Char('0')).toUpper()
-                              .arg(hexDump.trimmed());
 
     switch (code) {
     case 0x04: {
@@ -348,4 +352,93 @@ void SerialCommunication::stopDataStream()
     qDebug() << "Tüm veri akışı durduruldu - timer'lar ve seri port kapatıldı";
 
     emit connectionStatusChanged(false);
+}
+void SerialCommunication::sendSpo2Settings(int frequency, int mode, int averaging)
+{
+    qDebug() << "=== sendSpo2Settings BAŞLADI ===";
+    qDebug() << "Parametreler - Freq:" << frequency << "Mode:" << mode << "Avg:" << averaging;
+    qDebug() << "Seri port durumu:" << (serial->isOpen() ? "AÇIK" : "KAPALI");
+
+    if (!serial->isOpen()) {
+        qDebug() << "SPO2 ayarları gönderilemez - Port kapalı";
+        return;
+    }
+
+    qDebug() << "Port açık, işlem devam ediyor...";
+
+    // 1. Ayar byte'ını hesapla
+    uint8_t settingByte = calculateSpo2SettingByte(frequency, mode, averaging);
+    qDebug() << "Hesaplanan settingByte:" << QString("0x%1").arg(settingByte, 2, 16, QLatin1Char('0')).toUpper();
+
+    // 2. createSMMPacket'e doğrudan 0x06 komutu ile gönder
+    QByteArray data;
+    data.append(settingByte);
+    QByteArray packet = createSMMPacket(0x06, data);
+
+    qDebug() << "Oluşturulan paket:" << packet.toHex(' ').toUpper();
+
+    // 3. Paketi gönder
+    serial->write(packet);
+    serial->flush();
+    serial->waitForBytesWritten(100);
+
+    // 4. Log
+    qDebug() << QString("SPO2 ayarları GÖNDERİLDİ (0x06 ile) ➜ Freq: %1, Mode: %2, Avg: %3, Byte: 0x%4")
+                    .arg(frequency).arg(mode).arg(averaging)
+                    .arg(settingByte, 2, 16, QLatin1Char('0')).toUpper();
+    qDebug() << "Gönderilen paket:" << packet.toHex(' ').toUpper();
+
+}
+
+
+uint8_t SerialCommunication::calculateSpo2SettingByte(int frequency, int mode, int averaging)
+{
+    uint8_t settingByte = 0;
+
+    // Bit 1,0: Frequency ayarı
+    switch (frequency) {
+    case 50:
+        settingByte |= 0x02;  // 10 binary
+        break;
+    case 60:
+        settingByte |= 0x03;  // 11 binary
+        break;
+    default:
+        settingByte |= 0x02;  // Default 50Hz
+        break;
+    }
+
+    // Bits 4,3,2: Mode ayarı
+    switch (mode) {
+    case 0:  // Adult
+        settingByte |= (0x04 << 2);  // 100 binary shifted left 2
+        break;
+    case 1:  // Newborn
+        settingByte |= (0x05 << 2);  // 101 binary shifted left 2
+        break;
+    case 2:  // Pediatric
+        settingByte |= (0x06 << 2);  // 110 binary shifted left 2
+        break;
+    default:
+        settingByte |= (0x04 << 2);  // Default Adult
+        break;
+    }
+
+    // Bits 7,6,5: Averaging ayarı
+    switch (averaging) {
+    case 4:
+        settingByte |= (0x04 << 5);  // 100 binary shifted left 5
+        break;
+    case 8:
+        settingByte |= (0x05 << 5);  // 101 binary shifted left 5
+        break;
+    case 16:
+        settingByte |= (0x06 << 5);  // 110 binary shifted left 5
+        break;
+    default:
+        settingByte |= (0x04 << 5);  // Default 4 second
+        break;
+    }
+
+    return settingByte;
 }

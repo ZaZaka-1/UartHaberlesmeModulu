@@ -6,6 +6,7 @@
 
 int main(int argc, char *argv[])
 {
+
     QGuiApplication app(argc, argv);
     app.setApplicationName("StajProje_1");
     app.setOrganizationName("YourOrganization");

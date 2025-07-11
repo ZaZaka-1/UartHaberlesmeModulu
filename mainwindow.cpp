@@ -54,7 +54,7 @@ void MainWindow::handleWaveformData(uint8_t waveformValue)
     emit waveformDataChanged();
     emit realTimeWaveformPoint(waveformValue);
 
-    qDebug() << "Waveform data received:" << waveformValue;
+    // qDebug() << "Waveform data received:" << waveformValue;
 }
 
 MainWindow::~MainWindow()
@@ -310,4 +310,24 @@ void MainWindow::onWaveformSampleReceived()
 {
     m_waveformSample = serialComm->waveformSample();  // Veya uygun getter fonksiyonu
     emit realTimeWaveformPoint(m_waveformSample);
+}
+
+void MainWindow::sendSpo2Settings(int frequency, int mode, int averaging)
+{
+    // SerialCommunication nesnesine yönlendir
+    if (serialComm) {
+        serialComm->sendSpo2Settings(frequency, mode, averaging);
+    } else {
+        qWarning() << "SerialCommunication nesnesi bulunamadı!";
+    }
+}
+
+void MainWindow::sendSpo2SettingsFromQml(int frequency, int mode, int averaging)
+{
+    if (!serialComm) {
+        qWarning() << "SerialCommunication nesnesi tanımlı değil!";
+        return;
+    }
+
+    serialComm->sendSpo2Settings(frequency, mode, averaging);
 }

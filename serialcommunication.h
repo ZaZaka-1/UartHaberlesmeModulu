@@ -12,6 +12,8 @@ class SerialCommunication : public QObject
     Q_OBJECT
 
 public:
+    Q_INVOKABLE void sendSpo2Settings(int frequency, int mode, int averaging);
+
     int waveformSample() const { return m_waveformSample; }
     explicit SerialCommunication(QObject *parent = nullptr);
     ~SerialCommunication();
@@ -40,6 +42,7 @@ private slots:
     void sendNextPacket();
 
 private:
+    uint8_t calculateSpo2SettingByte(int frequency, int mode, int averaging);
 
     void openSerialPort();
     QList<QByteArray> createIndividualCommands();
