@@ -9,7 +9,8 @@
 MainWindow::MainWindow(QObject *parent)
     : QObject(parent),
     m_spo2(""),
-    m_pulse("")
+    m_pulse(""),
+    m_currentFrequency(50)
 {
     initDatabase();
 
@@ -17,6 +18,9 @@ MainWindow::MainWindow(QObject *parent)
     serialComm = new SerialCommunication(this);
 
     // Sinyal-slot bağlantıları
+    connect(serialComm, &SerialCommunication::frequencyReceived,
+            this, &MainWindow::handleFrequencyChanged);
+
     connect(serialComm, &SerialCommunication::spo2PulseData,
             this, &MainWindow::handleSpo2PulseData);
 
@@ -38,23 +42,18 @@ MainWindow::MainWindow(QObject *parent)
 
 void MainWindow::handleWaveformData(uint8_t waveformValue)
 {
-    // Waveform verisini listeye ekle
-    QVariantMap dataPoint;
-    dataPoint["amplitude"] = waveformValue;
-    dataPoint["timestamp"] = QDateTime::currentMSecsSinceEpoch();
-
-    m_waveformData.append(dataPoint);
-
-    // Maksimum nokta sayısını sınırla
-    if (m_waveformData.size() > MAX_WAVEFORM_POINTS) {
+    // Mevcut kodun üstüne bu kontrolü ekle
+    if (m_waveformData.size() >= MAX_WAVEFORM_POINTS) {
         m_waveformData.removeFirst();
     }
 
-    // Sinyalleri yay
+    QVariantMap dataPoint;
+    dataPoint["amplitude"] = waveformValue;
+    dataPoint["timestamp"] = QDateTime::currentMSecsSinceEpoch();
+    m_waveformData.append(dataPoint);
+
     emit waveformDataChanged();
     emit realTimeWaveformPoint(waveformValue);
-
-    // qDebug() << "Waveform data received:" << waveformValue;
 }
 
 MainWindow::~MainWindow()
@@ -314,20 +313,29 @@ void MainWindow::onWaveformSampleReceived()
 
 void MainWindow::sendSpo2Settings(int frequency, int mode, int averaging)
 {
-    // SerialCommunication nesnesine yönlendir
     if (serialComm) {
         serialComm->sendSpo2Settings(frequency, mode, averaging);
-    } else {
-        qWarning() << "SerialCommunication nesnesi bulunamadı!";
+        m_currentFrequency = frequency; // Yerel değişkeni güncelle
+        emit frequencyChanged(frequency);
     }
 }
 
 void MainWindow::sendSpo2SettingsFromQml(int frequency, int mode, int averaging)
 {
-    if (!serialComm) {
-        qWarning() << "SerialCommunication nesnesi tanımlı değil!";
-        return;
-    }
+    sendSpo2Settings(frequency, mode, averaging);
+}
 
-    serialComm->sendSpo2Settings(frequency, mode, averaging);
+void MainWindow::handleFrequencyChanged(int frequency)
+{
+    if (frequency != m_currentFrequency) {
+        m_currentFrequency = frequency;
+        emit frequencyChanged(frequency);
+        qDebug() << "Frekans değişti:" << frequency << "Hz";
+    }
+}
+
+int currentFrequency; // Global değişken
+
+void MainWindow::someFunction() {
+    int currentFrequency; // Yerel değişken (HATA DEĞİL, ama kafa karıştırıcı)
 }

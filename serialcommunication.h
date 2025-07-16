@@ -19,6 +19,7 @@ public:
     ~SerialCommunication();
 
     bool isConnected() const;
+    int currentFrequency() const { return m_currentFrequency; } // Yeni eklenen getter
 
 public slots:
     void reconnect();
@@ -32,6 +33,7 @@ signals:
     void ertData(uint8_t hr, uint8_t rr, float t1, float t2);
     void waveformDataReceived(uint8_t waveformValue);
     void modeChanged(int mode, const QString &modeStr);
+    void frequencyReceived(int frequency);
 
 private:
     // Fonksiyonlar
@@ -66,6 +68,7 @@ private:
     bool errorLogged;
     uint8_t currentMode = 0;
     int currentAveraging = 4; // seconds
+    int m_currentFrequency = 50; // Yeni eklenen frekans değişkeni (default 50Hz)
 
     QList<uint8_t> spo2Buffer;
     QList<uint16_t> pulseBuffer;
