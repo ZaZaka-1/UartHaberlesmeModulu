@@ -28,6 +28,13 @@ SerialCommunication::SerialCommunication(QObject *parent)
     dataRequestTimer = new QTimer(this);
     sequentialTimer = new QTimer(this);
 
+    averagingTimer = new QTimer(this);
+    averagingTimer->setSingleShot(false);
+    averagingTimer->setInterval(1000); // Her saniye kontrol et
+
+    connect(averagingTimer, &QTimer::timeout, this, &SerialCommunication::processAveraging);
+    averagingTimer->start();
+
     connectionTimer->setSingleShot(true);
     dataRequestTimer->setSingleShot(false);
     sequentialTimer->setSingleShot(true);
@@ -206,6 +213,8 @@ void SerialCommunication::parseBufferedData()
     }
 }
 
+// serialcommunication.cpp içindeki parsePacketByCode fonksiyonunu değiştirin:
+
 void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payload)
 {
     // Bu kodlar için debug mesajını kaldır: 0x02, 0x15, 0x0B, 0x01, 0x06, 0x05, 0x07, 0x03
@@ -239,30 +248,38 @@ void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payl
     }
     case 0x15: {
         if (payload.size() >= 6) {
-            // ✅ 1. Waveform ham verisini oku
             uint8_t waveformRaw = static_cast<uint8_t>(payload[1]);
-
-            // ✅ 2. SpO2 ve pulse değerlerini oku
             uint8_t spo2 = static_cast<uint8_t>(payload[3]);
             uint16_t pulse = (static_cast<uint8_t>(payload[4]) << 8) | static_cast<uint8_t>(payload[5]);
 
-            QString spo2Str = (spo2 == 0x7F || spo2 > 100) ? "Geçersiz" : QString::number(spo2);
-            QString pulseStr = (pulse > 240 || pulse == 0 || pulse == 0xFFFF) ? "Geçersiz" : QString::number(pulse);
+            uint8_t mode = 0;
+            QString modeStr = "Adult";
+            if (payload.size() > 6) {
+                mode = static_cast<uint8_t>(payload[6]);
+                currentMode = mode; // ✅ YENİ: Mode'u güncelle
+                modeStr = (mode == 0) ? "Adult" : (mode == 1) ? "Newborn" : (mode == 2) ? "Pediatric" : "Unknown";
+            }
 
-            qDebug().noquote() << QString("SPO2 (0x15) ➔ SpO2: %1 %% | Pulse: %2 bpm | Waveform: %3")
-                                      .arg(spo2Str)
-                                      .arg(pulseStr)
-                                      .arg(waveformRaw);
+            // ✅ YENİ: Geçerli veri kontrolü ve buffer'a ekleme
+            if (isValidSpo2(spo2, mode) && isValidPulse(pulse, mode)) {
+                addToBuffer(spo2, pulse);
+                lastValidSpo2 = spo2;
+                lastValidPulse = pulse;
+                lastValidSpo2Str = QString::number(spo2);
+                lastValidPulseStr = QString::number(pulse);
+            }
 
-            // ✅ 4. Yeni: waveform örneğini sakla ve bildir
+            // Debug ve diğer emit'ler aynı kalabilir
+            qDebug().noquote() << QString("SPO2 (0x15) ➔ SpO2: %1 %% | Pulse: %2 bpm | Waveform: %3 | Mode: %4 (%5)")
+                                      .arg(isValidSpo2(spo2, mode) ? QString::number(spo2) : "Geçersiz")
+                                      .arg(isValidPulse(pulse, mode) ? QString::number(pulse) : "Geçersiz")
+                                      .arg(waveformRaw)
+                                      .arg(modeStr)
+                                      .arg(mode);
+
             m_waveformSample = waveformRaw;
             emit waveformSampleReceived();
-
-            // ✅ 3. Waveform verisini QML'e gönder
             emit waveformDataReceived(waveformRaw);
-
-            // ✅ 4. SpO2 ve pulse verilerini gönder
-            emit spo2PulseData(spo2Str, pulseStr);
         }
         break;
     }
@@ -340,11 +357,15 @@ void SerialCommunication::stopDataStream()
     if (sequentialTimer && sequentialTimer->isActive()) {
         sequentialTimer->stop();
     }
+    if (averagingTimer && averagingTimer->isActive()) {
+        averagingTimer->stop();
+    }
 
     // Seri portu kapat
     if (serial && serial->isOpen()) {
         serial->close();
     }
+
 
     // Bayrakları sıfırla
     connectionSent = false;
@@ -352,6 +373,9 @@ void SerialCommunication::stopDataStream()
     qDebug() << "Tüm veri akışı durduruldu - timer'lar ve seri port kapatıldı";
 
     emit connectionStatusChanged(false);
+
+    spo2Buffer.clear();
+    pulseBuffer.clear();
 }
 void SerialCommunication::sendSpo2Settings(int frequency, int mode, int averaging)
 {
@@ -359,12 +383,18 @@ void SerialCommunication::sendSpo2Settings(int frequency, int mode, int averagin
     qDebug() << "Parametreler - Freq:" << frequency << "Mode:" << mode << "Avg:" << averaging;
     qDebug() << "Seri port durumu:" << (serial->isOpen() ? "AÇIK" : "KAPALI");
 
+    currentAveraging = averaging;
+    currentMode = mode;
+
     if (!serial->isOpen()) {
         qDebug() << "SPO2 ayarları gönderilemez - Port kapalı";
         return;
     }
 
     qDebug() << "Port açık, işlem devam ediyor...";
+
+    spo2Buffer.clear();
+    pulseBuffer.clear();
 
     // 1. Ayar byte'ını hesapla
     uint8_t settingByte = calculateSpo2SettingByte(frequency, mode, averaging);
@@ -441,4 +471,93 @@ uint8_t SerialCommunication::calculateSpo2SettingByte(int frequency, int mode, i
     }
 
     return settingByte;
+}
+
+void SerialCommunication::processAveraging()
+{
+    if (spo2Buffer.isEmpty() || pulseBuffer.isEmpty()) {
+        // Buffer boşsa son geçerli değerleri gönder
+        emit spo2PulseData(lastValidSpo2Str, lastValidPulseStr);
+        return;
+    }
+
+    // Zaman penceresi kontrolü (currentAveraging saniye)
+    int maxBufferSize = currentAveraging; // Her saniye 1 veri varsayıyoruz
+
+    // Buffer boyutunu sınırla
+    while (spo2Buffer.size() > maxBufferSize) {
+        spo2Buffer.removeFirst();
+    }
+    while (pulseBuffer.size() > maxBufferSize) {
+        pulseBuffer.removeFirst();
+    }
+
+    // Ortalama hesapla
+    if (spo2Buffer.size() >= 2 && pulseBuffer.size() >= 2) {
+        double avgSpo2 = 0;
+        double avgPulse = 0;
+
+        for (uint8_t value : spo2Buffer) {
+            avgSpo2 += value;
+        }
+        avgSpo2 /= spo2Buffer.size();
+
+        for (uint16_t value : pulseBuffer) {
+            avgPulse += value;
+        }
+        avgPulse /= pulseBuffer.size();
+
+        // Ortalama değerleri gönder
+        emit spo2PulseData(QString::number(qRound(avgSpo2)), QString::number(qRound(avgPulse)));
+
+        qDebug().noquote() << QString("ORTALAMA ➔ SpO2: %1%% | Pulse: %2 bpm | Buffer: %3 sample")
+                                  .arg(qRound(avgSpo2))
+                                  .arg(qRound(avgPulse))
+                                  .arg(spo2Buffer.size());
+    } else {
+        // Yeterli veri yoksa son geçerli değerleri gönder
+        emit spo2PulseData(lastValidSpo2Str, lastValidPulseStr);
+    }
+}
+
+bool SerialCommunication::isValidSpo2(uint8_t spo2, uint8_t mode)
+{
+    switch (mode) {
+    case 0: // Adult
+        return !(spo2 == 0x7F || spo2 > 100 || spo2 < 70);
+    case 1: // Newborn
+        return !(spo2 == 0x7F || spo2 > 100 || spo2 < 85);
+    case 2: // Pediatric
+        return !(spo2 == 0x7F || spo2 > 100 || spo2 < 75);
+    default:
+        return !(spo2 == 0x7F || spo2 > 100 || spo2 < 70);
+    }
+}
+
+bool SerialCommunication::isValidPulse(uint16_t pulse, uint8_t mode)
+{
+    switch (mode) {
+    case 0: // Adult
+        return !(pulse > 240 || pulse < 30 || pulse == 0 || pulse == 0xFFFF);
+    case 1: // Newborn
+        return !(pulse > 180 || pulse < 80 || pulse == 0 || pulse == 0xFFFF);
+    case 2: // Pediatric
+        return !(pulse > 200 || pulse < 60 || pulse == 0 || pulse == 0xFFFF);
+    default:
+        return !(pulse > 240 || pulse < 30 || pulse == 0 || pulse == 0xFFFF);
+    }
+}
+
+void SerialCommunication::addToBuffer(uint8_t spo2, uint16_t pulse)
+{
+    spo2Buffer.append(spo2);
+    pulseBuffer.append(pulse);
+
+    // Buffer boyutunu kontrol et (maksimum 60 saniye veri)
+    if (spo2Buffer.size() > 60) {
+        spo2Buffer.removeFirst();
+    }
+    if (pulseBuffer.size() > 60) {
+        pulseBuffer.removeFirst();
+    }
 }

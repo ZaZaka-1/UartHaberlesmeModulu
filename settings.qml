@@ -8,6 +8,7 @@ Item {
     anchors.fill: parent
 
     signal navigateBack()
+    signal ageGroupChanged(string ageGroup)
 
     // Settings - Ayarları kalıcı hale getirmek için
     Settings {
@@ -40,55 +41,67 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        anchors.margins: 20
-        color: "#1a1a1a"
-        radius: 8
-        border.color: "#333333"
-        border.width: 1
+        anchors.margins: 15
+        radius: 10
+        color: "#161b22"
+        border.color: "#30363d"
+        border.width: 2
 
         Column {
             anchors.fill: parent
-            anchors.margins: 20
+            anchors.margins: 15
             spacing: 20
 
             // Başlık Bölümü
-            Row {
+            Rectangle {
                 width: parent.width
-                spacing: 15
+                height: 55
+                color: "#21262d"
+                radius: 8
+                border.color: "#30363d"
+                border.width: 1
 
-                Button {
-                    width: 35
-                    height: 35
-                    background: Rectangle {
-                        color: parent.pressed ? "#4a90e2" : "#2a2a2a"
-                        radius: 4
-                        border.color: "#4a90e2"
-                        border.width: 1
-                    }
-                    contentItem: Text {
-                        text: "←"
-                        font.pointSize: 16
-                        font.bold: true
-                        color: "#4a90e2"
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    onClicked: settingsPage.navigateBack()
-                }
-
-                Text {
+                Row {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 15
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "SPO2 AYARLARI"
-                    font.pointSize: 18
-                    font.bold: true
-                    color: "#ffffff"
+                    spacing: 15
+
+                    Button {
+                        width: 35
+                        height: 35
+                        background: Rectangle {
+                            color: parent.pressed ? "#238636" : "#21262d"
+                            radius: 6
+                            border.color: "#58a6ff"
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: "←"
+                            font.pointSize: 16
+                            font.bold: true
+                            color: "#58a6ff"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: settingsPage.navigateBack()
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "SPO2 AYARLARI"
+                        font.family: "Consolas, monospace"
+                        font.pointSize: 12
+                        font.bold: true
+                        color: "#58a6ff"
+                    }
                 }
             }
 
             // Ayarlar İçerik Bölümü
             Column {
                 width: parent.width
-                spacing: 25
+                spacing: 20
 
                 // Frequency Ayarı (Bits 1,0)
                 Column {
@@ -96,28 +109,30 @@ Item {
                     spacing: 8
 
                     Text {
-                        text: "FREQUENCY "
+                        text: "FREQUENCY"
+                        font.family: "Consolas, monospace"
                         font.pointSize: 12
                         font.bold: true
-                        color: "#4a90e2"
+                        color: "#58a6ff"
                     }
 
                     Rectangle {
                         width: parent.width
                         height: 60
-                        color: "#2a2a2a"
-                        radius: 6
-                        border.color: "#333333"
+                        color: "#21262d"
+                        radius: 8
+                        border.color: "#30363d"
                         border.width: 1
 
                         Row {
                             anchors.centerIn: parent
-                            spacing: 30
+                            spacing: 40
 
                             RadioButton {
                                 id: freq50Hz
                                 text: "50 Hz (10)"
-                                font.pointSize: 11
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 10
                                 ButtonGroup.group: frequencyGroup
                                 onCheckedChanged: {
                                     if (checked) {
@@ -127,22 +142,22 @@ Item {
                                 }
 
                                 indicator: Rectangle {
-                                    implicitWidth: 14
-                                    implicitHeight: 14
+                                    implicitWidth: 16
+                                    implicitHeight: 16
                                     x: parent.leftPadding
                                     y: parent.height / 2 - height / 2
-                                    radius: 7
-                                    color: "#1a1a1a"
-                                    border.color: parent.checked ? "#4a90e2" : "#666666"
+                                    radius: 8
+                                    color: "#0d1117"
+                                    border.color: parent.checked ? "#58a6ff" : "#7d8590"
                                     border.width: 2
 
                                     Rectangle {
-                                        width: 6
-                                        height: 6
+                                        width: 8
+                                        height: 8
                                         x: 4
                                         y: 4
-                                        radius: 3
-                                        color: "#4a90e2"
+                                        radius: 4
+                                        color: "#58a6ff"
                                         visible: parent.parent.checked
                                     }
                                 }
@@ -159,7 +174,8 @@ Item {
                             RadioButton {
                                 id: freq60Hz
                                 text: "60 Hz (11)"
-                                font.pointSize: 11
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 10
                                 ButtonGroup.group: frequencyGroup
                                 onCheckedChanged: {
                                     if (checked) {
@@ -169,22 +185,22 @@ Item {
                                 }
 
                                 indicator: Rectangle {
-                                    implicitWidth: 14
-                                    implicitHeight: 14
+                                    implicitWidth: 16
+                                    implicitHeight: 16
                                     x: parent.leftPadding
                                     y: parent.height / 2 - height / 2
-                                    radius: 7
-                                    color: "#1a1a1a"
-                                    border.color: parent.checked ? "#4a90e2" : "#666666"
+                                    radius: 8
+                                    color: "#0d1117"
+                                    border.color: parent.checked ? "#58a6ff" : "#7d8590"
                                     border.width: 2
 
                                     Rectangle {
-                                        width: 6
-                                        height: 6
+                                        width: 8
+                                        height: 8
                                         x: 4
                                         y: 4
-                                        radius: 3
-                                        color: "#4a90e2"
+                                        radius: 4
+                                        color: "#58a6ff"
                                         visible: parent.parent.checked
                                     }
                                 }
@@ -201,63 +217,67 @@ Item {
                     }
                 }
 
-                // Mode Ayarı (Bits 4,3,2)
+                // Mode Ayarı (Bits 4,3,2) - Yaş Grupları
                 Column {
                     width: parent.width
                     spacing: 8
 
                     Text {
-                        text: "MOD "
+                        text: "YAŞ GRUBU (MOD)"
+                        font.family: "Consolas, monospace"
                         font.pointSize: 12
                         font.bold: true
-                        color: "#e74c3c"
+                        color: "#ff7b72"
                     }
 
                     Rectangle {
                         width: parent.width
-                        height: 90
-                        color: "#2a2a2a"
-                        radius: 6
-                        border.color: "#333333"
+                        height: 120
+                        color: "#21262d"
+                        radius: 8
+                        border.color: "#30363d"
                         border.width: 1
 
                         Column {
                             anchors.centerIn: parent
-                            spacing: 12
+                            spacing: 15
 
                             Row {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: 25
+                                spacing: 30
 
                                 RadioButton {
                                     id: modeAdult
                                     text: "Adult (100)"
-                                    font.pointSize: 11
+                                    font.family: "Consolas, monospace"
+                                    font.pointSize: 10
                                     ButtonGroup.group: modeGroup
                                     onCheckedChanged: {
                                         if (checked) {
                                             settings.mode = "Adult"
                                             calculateByteValue()
+                                            updateAgeGroupInfo()
+                                            settingsPage.ageGroupChanged("Adult")
                                         }
                                     }
 
                                     indicator: Rectangle {
-                                        implicitWidth: 14
-                                        implicitHeight: 14
+                                        implicitWidth: 16
+                                        implicitHeight: 16
                                         x: parent.leftPadding
                                         y: parent.height / 2 - height / 2
-                                        radius: 7
-                                        color: "#1a1a1a"
-                                        border.color: parent.checked ? "#e74c3c" : "#666666"
+                                        radius: 8
+                                        color: "#0d1117"
+                                        border.color: parent.checked ? "#ff7b72" : "#7d8590"
                                         border.width: 2
 
                                         Rectangle {
-                                            width: 6
-                                            height: 6
+                                            width: 8
+                                            height: 8
                                             x: 4
                                             y: 4
-                                            radius: 3
-                                            color: "#e74c3c"
+                                            radius: 4
+                                            color: "#ff7b72"
                                             visible: parent.parent.checked
                                         }
                                     }
@@ -274,32 +294,35 @@ Item {
                                 RadioButton {
                                     id: modeNewborn
                                     text: "Newborn (101)"
-                                    font.pointSize: 11
+                                    font.family: "Consolas, monospace"
+                                    font.pointSize: 10
                                     ButtonGroup.group: modeGroup
                                     onCheckedChanged: {
                                         if (checked) {
                                             settings.mode = "Newborn"
                                             calculateByteValue()
+                                            updateAgeGroupInfo()
+                                            settingsPage.ageGroupChanged("Newborn")
                                         }
                                     }
 
                                     indicator: Rectangle {
-                                        implicitWidth: 14
-                                        implicitHeight: 14
+                                        implicitWidth: 16
+                                        implicitHeight: 16
                                         x: parent.leftPadding
                                         y: parent.height / 2 - height / 2
-                                        radius: 7
-                                        color: "#1a1a1a"
-                                        border.color: parent.checked ? "#e74c3c" : "#666666"
+                                        radius: 8
+                                        color: "#0d1117"
+                                        border.color: parent.checked ? "#ff7b72" : "#7d8590"
                                         border.width: 2
 
                                         Rectangle {
-                                            width: 6
-                                            height: 6
+                                            width: 8
+                                            height: 8
                                             x: 4
                                             y: 4
-                                            radius: 3
-                                            color: "#e74c3c"
+                                            radius: 4
+                                            color: "#ff7b72"
                                             visible: parent.parent.checked
                                         }
                                     }
@@ -316,37 +339,40 @@ Item {
 
                             Row {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: 25
+                                spacing: 30
 
                                 RadioButton {
                                     id: modePediatric
                                     text: "Pediatric (110)"
-                                    font.pointSize: 11
+                                    font.family: "Consolas, monospace"
+                                    font.pointSize: 10
                                     ButtonGroup.group: modeGroup
                                     onCheckedChanged: {
                                         if (checked) {
                                             settings.mode = "Pediatric"
                                             calculateByteValue()
+                                            updateAgeGroupInfo()
+                                            settingsPage.ageGroupChanged("Pediatric")
                                         }
                                     }
 
                                     indicator: Rectangle {
-                                        implicitWidth: 14
-                                        implicitHeight: 14
+                                        implicitWidth: 16
+                                        implicitHeight: 16
                                         x: parent.leftPadding
                                         y: parent.height / 2 - height / 2
-                                        radius: 7
-                                        color: "#1a1a1a"
-                                        border.color: parent.checked ? "#e74c3c" : "#666666"
+                                        radius: 8
+                                        color: "#0d1117"
+                                        border.color: parent.checked ? "#ff7b72" : "#7d8590"
                                         border.width: 2
 
                                         Rectangle {
-                                            width: 6
-                                            height: 6
+                                            width: 8
+                                            height: 8
                                             x: 4
                                             y: 4
-                                            radius: 3
-                                            color: "#e74c3c"
+                                            radius: 4
+                                            color: "#ff7b72"
                                             visible: parent.parent.checked
                                         }
                                     }
@@ -362,6 +388,49 @@ Item {
                             }
                         }
                     }
+
+                    // Yaş grubu bilgi metni - Güncellenmiş
+                    Rectangle {
+                        width: parent.width
+                        height: 80
+                        color: "#0d1117"
+                        radius: 6
+                        border.color: "#30363d"
+                        border.width: 1
+
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 5
+
+                            Text {
+                                id: ageGroupInfo
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: "Yaş grubu seçin"
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 10
+                                font.bold: true
+                                color: "#7d8590"
+                            }
+
+                            Text {
+                                id: ageGroupRanges
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: ""
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 9
+                                color: "#58a6ff"
+                            }
+
+                            Text {
+                                id: ageGroupPulseRange
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: ""
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 9
+                                color: "#7ee787"
+                            }
+                        }
+                    }
                 }
 
                 // Averaging Ayarı (Bits 7,6,5)
@@ -370,32 +439,34 @@ Item {
                     spacing: 8
 
                     Text {
-                        text: "AVERAGING "
+                        text: "AVERAGING"
+                        font.family: "Consolas, monospace"
                         font.pointSize: 12
                         font.bold: true
-                        color: "#27ae60"
+                        color: "#7ee787"
                     }
 
                     Rectangle {
                         width: parent.width
-                        height: 90
-                        color: "#2a2a2a"
-                        radius: 6
-                        border.color: "#333333"
+                        height: 120
+                        color: "#21262d"
+                        radius: 8
+                        border.color: "#30363d"
                         border.width: 1
 
                         Column {
                             anchors.centerIn: parent
-                            spacing: 12
+                            spacing: 15
 
                             Row {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: 25
+                                spacing: 30
 
                                 RadioButton {
                                     id: avg4sec
                                     text: "4 sec (100)"
-                                    font.pointSize: 11
+                                    font.family: "Consolas, monospace"
+                                    font.pointSize: 10
                                     ButtonGroup.group: averagingGroup
                                     onCheckedChanged: {
                                         if (checked) {
@@ -405,22 +476,22 @@ Item {
                                     }
 
                                     indicator: Rectangle {
-                                        implicitWidth: 14
-                                        implicitHeight: 14
+                                        implicitWidth: 16
+                                        implicitHeight: 16
                                         x: parent.leftPadding
                                         y: parent.height / 2 - height / 2
-                                        radius: 7
-                                        color: "#1a1a1a"
-                                        border.color: parent.checked ? "#27ae60" : "#666666"
+                                        radius: 8
+                                        color: "#0d1117"
+                                        border.color: parent.checked ? "#7ee787" : "#7d8590"
                                         border.width: 2
 
                                         Rectangle {
-                                            width: 6
-                                            height: 6
+                                            width: 8
+                                            height: 8
                                             x: 4
                                             y: 4
-                                            radius: 3
-                                            color: "#27ae60"
+                                            radius: 4
+                                            color: "#7ee787"
                                             visible: parent.parent.checked
                                         }
                                     }
@@ -437,7 +508,8 @@ Item {
                                 RadioButton {
                                     id: avg8sec
                                     text: "8 sec (101)"
-                                    font.pointSize: 11
+                                    font.family: "Consolas, monospace"
+                                    font.pointSize: 10
                                     ButtonGroup.group: averagingGroup
                                     onCheckedChanged: {
                                         if (checked) {
@@ -447,22 +519,22 @@ Item {
                                     }
 
                                     indicator: Rectangle {
-                                        implicitWidth: 14
-                                        implicitHeight: 14
+                                        implicitWidth: 16
+                                        implicitHeight: 16
                                         x: parent.leftPadding
                                         y: parent.height / 2 - height / 2
-                                        radius: 7
-                                        color: "#1a1a1a"
-                                        border.color: parent.checked ? "#27ae60" : "#666666"
+                                        radius: 8
+                                        color: "#0d1117"
+                                        border.color: parent.checked ? "#7ee787" : "#7d8590"
                                         border.width: 2
 
                                         Rectangle {
-                                            width: 6
-                                            height: 6
+                                            width: 8
+                                            height: 8
                                             x: 4
                                             y: 4
-                                            radius: 3
-                                            color: "#27ae60"
+                                            radius: 4
+                                            color: "#7ee787"
                                             visible: parent.parent.checked
                                         }
                                     }
@@ -479,12 +551,13 @@ Item {
 
                             Row {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: 25
+                                spacing: 30
 
                                 RadioButton {
                                     id: avg16sec
                                     text: "16 sec (110)"
-                                    font.pointSize: 11
+                                    font.family: "Consolas, monospace"
+                                    font.pointSize: 10
                                     ButtonGroup.group: averagingGroup
                                     onCheckedChanged: {
                                         if (checked) {
@@ -494,22 +567,22 @@ Item {
                                     }
 
                                     indicator: Rectangle {
-                                        implicitWidth: 14
-                                        implicitHeight: 14
+                                        implicitWidth: 16
+                                        implicitHeight: 16
                                         x: parent.leftPadding
                                         y: parent.height / 2 - height / 2
-                                        radius: 7
-                                        color: "#1a1a1a"
-                                        border.color: parent.checked ? "#27ae60" : "#666666"
+                                        radius: 8
+                                        color: "#0d1117"
+                                        border.color: parent.checked ? "#7ee787" : "#7d8590"
                                         border.width: 2
 
                                         Rectangle {
-                                            width: 6
-                                            height: 6
+                                            width: 8
+                                            height: 8
                                             x: 4
                                             y: 4
-                                            radius: 3
-                                            color: "#27ae60"
+                                            radius: 4
+                                            color: "#7ee787"
                                             visible: parent.parent.checked
                                         }
                                     }
@@ -530,29 +603,31 @@ Item {
                 // Hesaplanan Değer Gösterimi
                 Rectangle {
                     width: parent.width
-                    height: 60
-                    color: "#2a2a2a"
-                    radius: 6
-                    border.color: "#f39c12"
+                    height: 70
+                    color: "#21262d"
+                    radius: 8
+                    border.color: "#ffa500"
                     border.width: 2
 
                     Column {
                         anchors.centerIn: parent
-                        spacing: 5
+                        spacing: 8
 
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: "HESAPLANAN DEĞER"
+                            font.family: "Consolas, monospace"
                             font.pointSize: 10
                             font.bold: true
-                            color: "#f39c12"
+                            color: "#ffa500"
                         }
 
                         Text {
                             id: calculatedValue
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: "Dec: 146 | Hex: 0x92 | Bin: 10010010"
-                            font.pointSize: 14
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 11
                             font.bold: true
                             color: "#ffffff"
                         }
@@ -566,24 +641,28 @@ Item {
 
                     Button {
                         width: 120
-                        height: 40
+                        height: 35
                         background: Rectangle {
-                            color: parent.pressed ? "#229954" : "#27ae60"
+                            color: parent.pressed ? "#238636" : "#21262d"
                             radius: 6
+                            border.color: "#7ee787"
+                            border.width: 1
                         }
                         contentItem: Text {
                             text: "Gönder"
-                            font.pointSize: 12
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 10
                             font.bold: true
-                            color: "#ffffff"
+                            color: "#7ee787"
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
                         onClicked: {
-                            var settings = getSettingsComponents()
+                            var settingsData = getSettingsComponents()
 
                             if (typeof mainWindow !== "undefined" && mainWindow.sendSpo2SettingsFromQml) {
-                                mainWindow.sendSpo2SettingsFromQml(settings.frequency, settings.mode, settings.averaging)
+                                mainWindow.sendSpo2SettingsFromQml(settingsData.frequency, settingsData.mode, settingsData.averaging)
+                                console.log("Ayarlar gönderildi:", settingsData)
                             } else {
                                 console.log("mainWindow.sendSpo2SettingsFromQml tanımlı değil!")
                             }
@@ -592,20 +671,21 @@ Item {
                         }
                     }
 
-
-
                     Button {
-                        width: 100
-                        height: 40
+                        width: 120
+                        height: 35
                         background: Rectangle {
-                            color: parent.pressed ? "#c0392b" : "#e74c3c"
+                            color: parent.pressed ? "#da3633" : "#21262d"
                             radius: 6
+                            border.color: "#ff7b72"
+                            border.width: 1
                         }
                         contentItem: Text {
                             text: "İptal"
-                            font.pointSize: 12
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 10
                             font.bold: true
-                            color: "#ffffff"
+                            color: "#ff7b72"
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -618,8 +698,31 @@ Item {
         }
     }
 
+    // Yaş grubu bilgilerini güncelleyen fonksiyon
+    function updateAgeGroupInfo() {
+        if (modeAdult.checked) {
+            ageGroupInfo.text = "Adult Mode - Yetişkin"
+            ageGroupRanges.text = "SpO2: 70-100% (Geçersiz: <70 veya >100)"
+            ageGroupPulseRange.text = "Pulse: 30-240 bpm (Geçersiz: <30 veya >240)"
+        } else if (modeNewborn.checked) {
+            ageGroupInfo.text = "Newborn Mode - Yenidoğan"
+            ageGroupRanges.text = "SpO2: 85-100% (Geçersiz: <85 veya >100)"
+            ageGroupPulseRange.text = "Pulse: 80-180 bpm (Geçersiz: <80 veya >180)"
+        } else if (modePediatric.checked) {
+            ageGroupInfo.text = "Pediatric Mode - Pediatrik"
+            ageGroupRanges.text = "SpO2: 75-100% (Geçersiz: <75 veya >100)"
+            ageGroupPulseRange.text = "Pulse: 60-200 bpm (Geçersiz: <60 veya >200)"
+        } else {
+            ageGroupInfo.text = "Yaş grubu seçin"
+            ageGroupRanges.text = ""
+            ageGroupPulseRange.text = ""
+        }
+    }
+
     // Ayarları geri yükle
     function restoreSettings() {
+        console.log("Ayarlar geri yükleniyor...")
+
         // Frequency ayarlarını geri yükle
         if (settings.frequency === "50Hz") {
             freq50Hz.checked = true
@@ -647,6 +750,12 @@ Item {
 
         // Hesaplanan değeri güncelle
         calculateByteValue()
+
+        // Yaş grubu bilgilerini güncelle
+        updateAgeGroupInfo()
+
+        // Ana sayfaya mevcut yaş grubunu bildir
+        settingsPage.ageGroupChanged(settings.mode)
     }
 
     // Byte değerini hesaplayan fonksiyon
