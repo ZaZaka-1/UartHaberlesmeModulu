@@ -4,112 +4,106 @@ import QtQuick.Layouts 1.15
 
 Item {
     id: page2
-    signal navigateBack()  // Geri dönüş sinyali
+    signal navigateBack()
 
     property var measurements: []
     property bool updatePending: false
-    property var seenTimestamps: ({})  // Görülen timestamp'leri takip etmek için
-    property int lastDatabaseCount: 0  // Son database kayıt sayısı
+    property var seenTimestamps: ({})
+    property int lastDatabaseCount: 0
+
+    // Waveform database için yeni özellikler
+    property var waveformDatabase: []
+    property bool showWaveformData: false
 
     Component.onCompleted: {
         console.log("main2.qml yüklendi - verileri yükleniyor...")
         loadMeasurements()
-        // Sayfa açıldığında otomatik güncellemeyi başlat
+        loadWaveformData()
         autoUpdateTimer.start()
     }
 
-    // Yeni ölçüm eklendiğinde tabloyu güncelle - ancak yavaşlatılmış
+    // Waveform database'ini ana sayfadan al
+    function setWaveformDatabase(database) {
+        waveformDatabase = database
+        console.log("Waveform database alındı - " + database.length + " session")
+    }
+
+    function loadWaveformData() {
+        if (typeof root !== 'undefined' && root.getWaveformDatabase) {
+            waveformDatabase = root.getWaveformDatabase()
+            console.log("Waveform database yüklendi - " + waveformDatabase.length + " session")
+        }
+    }
+
     Connections {
         target: mainWindow
         function onMeasurementAdded() {
-            // Eğer zaten bir güncelleme bekliyorsa, yeni güncelleme yapma
             if (!updatePending) {
                 updatePending = true
-                // 1 saniye bekle, sonra güncelle
                 updateTimer.start()
             }
         }
     }
 
-    // Güncelleme timer'ı - veri akışını yavaşlatmak için
     Timer {
         id: updateTimer
-        interval: 1000  // 1 saniye
+        interval: 1000
         running: false
         repeat: false
         onTriggered: {
             loadMeasurements()
+            loadWaveformData()
             updatePending = false
         }
     }
 
-    // Otomatik güncelleme timer'ı - belirli aralıklarla tabloyu güncelle
     Timer {
         id: autoUpdateTimer
-        interval: 2000  // 2 saniyede bir güncelle
+        interval: 2000
         running: false
         repeat: true
         onTriggered: {
             loadMeasurements()
+            loadWaveformData()
         }
     }
 
     function loadMeasurements() {
-        // Database'den tüm verileri al
-        var allMeasurements = mainWindow.getMeasurementsFromDatabase(1000) // Daha fazla kayıt al
-
+        var allMeasurements = mainWindow.getMeasurementsFromDatabase(1000)
         if (!allMeasurements || allMeasurements.length === 0) {
             console.log("Database'den veri alınamadı")
             return
         }
 
-        // Mevcut database kayıt sayısını kontrol et
         var currentDatabaseCount = mainWindow.getTotalMeasurementCount ? mainWindow.getTotalMeasurementCount() : 0
-
-        // Eğer database'de yeni kayıt yoksa ve mevcut listede veri varsa güncelleme yapma
         if (currentDatabaseCount === lastDatabaseCount && measurements.length > 0) {
             return
         }
-
         lastDatabaseCount = currentDatabaseCount
 
-        // Yeni verileri filtrele (aynı saniyedeki verileri engelle)
         var newMeasurements = []
-
         for (var i = 0; i < allMeasurements.length; i++) {
             var measurement = allMeasurements[i]
-            var timestamp = measurement.timestamp
+            var timestampSeconds = measurement.timestamp.substring(0, 19)
 
-            // Saniye seviyesinde timestamp'i al
-            var timestampSeconds = timestamp.substring(0, 19) // "YYYY-MM-DD HH:MM:SS" formatında
-
-            // Bu saniye daha önce görülmemişse listeye ekle
             if (!seenTimestamps[timestampSeconds]) {
                 seenTimestamps[timestampSeconds] = true
                 newMeasurements.push(measurement)
             }
         }
 
-        // Yeni verileri var ise listenin başına ekle (en yeni veriler üstte)
         if (newMeasurements.length > 0) {
             console.log("Yeni " + newMeasurements.length + " veri eklendi")
-
-            // Tarihe göre ters sırala (en yeni üstte)
             newMeasurements.sort(function(a, b) {
                 return new Date(b.timestamp) - new Date(a.timestamp)
             })
-
-            // Yeni verileri mevcut verilerin başına ekle
             measurements = newMeasurements.concat(measurements)
-
-            // Maksimum 1000 kayıt tut (performans için)
             if (measurements.length > 1000) {
                 measurements = measurements.slice(0, 1000)
             }
         }
     }
 
-    // Measurements dizisini temizle
     function clearMeasurements() {
         measurements = []
         seenTimestamps = {}
@@ -117,11 +111,24 @@ Item {
         console.log("Veriler temizlendi")
     }
 
-    // Tüm verileri yeniden yükle
     function refreshAllData() {
         clearMeasurements()
         loadMeasurements()
+        loadWaveformData()
         console.log("Tüm veriler yeniden yüklendi")
+    }
+
+    function formatTimestamp(timestamp) {
+        var date = new Date(timestamp)
+        return Qt.formatDateTime(date, "dd.MM.yyyy hh:mm:ss")
+    }
+
+    function getStatusColor(isNormal) {
+        return isNormal ? "#7ee787" : "#ff6b6b"
+    }
+
+    function getStatusText(isNormal) {
+        return isNormal ? "Normal" : "Kritik"
     }
 
     Rectangle {
@@ -133,28 +140,29 @@ Item {
             anchors.margins: 20
             spacing: 20
 
-            // Başlık kısmı
+            // Ana başlık
             Text {
-                text: "Ölçüm Verileri (Database)"
+                text: showWaveformData ? "Waveform Database" : "Ölçüm Verileri (Database)"
                 font.pixelSize: 24
                 font.family: "Consolas, monospace"
                 color: "#58a6ff"
                 Layout.alignment: Qt.AlignHCenter
             }
 
-            // Üst kısım - Bilgiler ve butonlar
+            // Kontrol paneli
             RowLayout {
                 Layout.fillWidth: true
 
                 Text {
-                    text: "Toplam Kayıt: " + (mainWindow.getTotalMeasurementCount ? mainWindow.getTotalMeasurementCount() : "N/A") + " (Tabloda: " + measurements.length + ")"
+                    text: showWaveformData ?
+                        "Waveform Sessions: " + waveformDatabase.length :
+                        "Toplam Kayıt: " + (mainWindow.getTotalMeasurementCount ? mainWindow.getTotalMeasurementCount() : "N/A") + " (Tabloda: " + measurements.length + ")"
                     font.family: "Consolas, monospace"
                     font.pointSize: 10
                     font.bold: true
                     color: "#58a6ff"
                 }
 
-                // Otomatik güncelleme durumu
                 Text {
                     text: "Otomatik Güncelleme: " + (autoUpdateTimer.running ? "AÇIK" : "KAPALI")
                     font.family: "Consolas, monospace"
@@ -162,90 +170,112 @@ Item {
                     color: autoUpdateTimer.running ? "#7ee787" : "#ff6b6b"
                 }
 
-                Item { Layout.fillWidth: true } // Spacer
+                Item { Layout.fillWidth: true }
 
-                // Otomatik güncelleme toggle butonu
-                Button {
-                    text: autoUpdateTimer.running ? "Dur" : "Başlat"
-                    width: 80
-                    height: 30
-                    background: Rectangle {
-                        color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
-                        radius: 6
-                        border.color: autoUpdateTimer.running ? "#ff6b6b" : "#7ee787"
-                        border.width: 1
-                    }
-                    contentItem: Text {
-                        text: parent.text
-                        font.family: "Consolas, monospace"
-                        font.pointSize: 9
-                        color: autoUpdateTimer.running ? "#ff6b6b" : "#7ee787"
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    onClicked: {
-                        if (autoUpdateTimer.running) {
-                            autoUpdateTimer.stop()
-                            console.log("Otomatik güncelleme durduruldu")
-                        } else {
-                            autoUpdateTimer.start()
-                            console.log("Otomatik güncelleme başlatıldı")
+                Row {
+                    spacing: 10
+
+                    Button {
+                        text: showWaveformData ? "Measurements" : "Waveforms"
+                        width: 100
+                        height: 30
+                        background: Rectangle {
+                            color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
+                            radius: 6
+                            border.color: "#ffa500"
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 9
+                            color: "#ffa500"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: {
+                            showWaveformData = !showWaveformData
+                            loadWaveformData()
                         }
                     }
-                }
 
-                Button {
-                    text: "Yenile"
-                    width: 80
-                    height: 30
-                    background: Rectangle {
-                        color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
-                        radius: 6
-                        border.color: "#58a6ff"
-                        border.width: 1
-                    }
-                    contentItem: Text {
-                        text: parent.text
-                        font.family: "Consolas, monospace"
-                        font.pointSize: 9
-                        color: "#58a6ff"
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    onClicked: {
-                        refreshAllData()
-                    }
-                }
-
-                Button {
-                    text: "Temizle"
-                    width: 80
-                    height: 30
-                    background: Rectangle {
-                        color: parent.pressed ? "#da3633" : (parent.hovered ? "#2d333b" : "#21262d")
-                        radius: 6
-                        border.color: "#ff6b6b"
-                        border.width: 1
-                    }
-                    contentItem: Text {
-                        text: parent.text
-                        font.family: "Consolas, monospace"
-                        font.pointSize: 9
-                        color: "#ff6b6b"
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    onClicked: {
-                        if (mainWindow.clearDatabase) {
-                            mainWindow.clearDatabase()
-                            console.log("Database temizlendi")
+                    Button {
+                        text: autoUpdateTimer.running ? "Dur" : "Başlat"
+                        width: 70
+                        height: 30
+                        background: Rectangle {
+                            color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
+                            radius: 6
+                            border.color: autoUpdateTimer.running ? "#ff6b6b" : "#7ee787"
+                            border.width: 1
                         }
-                        clearMeasurements()
+                        contentItem: Text {
+                            text: parent.text
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 9
+                            color: autoUpdateTimer.running ? "#ff6b6b" : "#7ee787"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: {
+                            if (autoUpdateTimer.running) {
+                                autoUpdateTimer.stop()
+                            } else {
+                                autoUpdateTimer.start()
+                            }
+                        }
+                    }
+
+                    Button {
+                        text: "Yenile"
+                        width: 70
+                        height: 30
+                        background: Rectangle {
+                            color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
+                            radius: 6
+                            border.color: "#58a6ff"
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 9
+                            color: "#58a6ff"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: refreshAllData()
+                    }
+
+                    Button {
+                        text: "Temizle"
+                        width: 70
+                        height: 30
+                        background: Rectangle {
+                            color: parent.pressed ? "#da3633" : (parent.hovered ? "#2d333b" : "#21262d")
+                            radius: 6
+                            border.color: "#ff6b6b"
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 9
+                            color: "#ff6b6b"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: {
+                            if (mainWindow.clearDatabase) {
+                                mainWindow.clearDatabase()
+                            }
+                            clearMeasurements()
+                        }
                     }
                 }
             }
 
-            // Tablo başlıkları
+            // Tablo başlığı - Measurements
             Rectangle {
                 Layout.fillWidth: true
                 height: 40
@@ -253,6 +283,7 @@ Item {
                 border.color: "#58a6ff"
                 border.width: 1
                 radius: 6
+                visible: !showWaveformData
 
                 RowLayout {
                     anchors.fill: parent
@@ -296,7 +327,86 @@ Item {
                 }
             }
 
-            // Tablo veriler
+            // Tablo başlığı - Waveforms
+            Rectangle {
+                Layout.fillWidth: true
+                height: 40
+                color: "#21262d"
+                border.color: "#58a6ff"
+                border.width: 1
+                radius: 6
+                visible: showWaveformData
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 5
+
+                    Text {
+                        Layout.preferredWidth: 50
+                        text: "ID"
+                        font.family: "Consolas, monospace"
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Text {
+                        Layout.preferredWidth: 120
+                        text: "Tarih/Saat"
+                        font.family: "Consolas, monospace"
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Text {
+                        Layout.preferredWidth: 70
+                        text: "SpO2"
+                        font.family: "Consolas, monospace"
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Text {
+                        Layout.preferredWidth: 70
+                        text: "Pulse"
+                        font.family: "Consolas, monospace"
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Text {
+                        Layout.preferredWidth: 80
+                        text: "Age Group"
+                        font.family: "Consolas, monospace"
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Text {
+                        Layout.preferredWidth: 70
+                        text: "Status"
+                        font.family: "Consolas, monospace"
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Text {
+                        Layout.preferredWidth: 80
+                        text: "Samples"
+                        font.family: "Consolas, monospace"
+                        font.bold: true
+                        color: "#58a6ff"
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+            }
+
+            // Veri tablosu
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -308,10 +418,12 @@ Item {
                     radius: 6
                 }
 
+                // Measurements ListView
                 ListView {
                     id: measurementList
                     model: measurements
-                    clip: true  // Performans için
+                    clip: true
+                    visible: !showWaveformData
 
                     delegate: Rectangle {
                         width: measurementList.width
@@ -369,29 +481,172 @@ Item {
                         }
                     }
                 }
+
+                // Waveforms ListView
+                ListView {
+                    id: waveformList
+                    model: waveformDatabase
+                    clip: true
+                    visible: showWaveformData
+
+                    delegate: Rectangle {
+                        width: waveformList.width
+                        height: 80
+                        color: index % 2 === 0 ? "#161b22" : "#0d1117"
+                        border.color: "#30363d"
+                        border.width: 1
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 5
+
+                            Text {
+                                Layout.preferredWidth: 50
+                                text: index + 1
+                                font.family: "Consolas, monospace"
+                                color: "#f0f6fc"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Text {
+                                Layout.preferredWidth: 120
+                                text: formatTimestamp(modelData.timestamp)
+                                font.family: "Consolas, monospace"
+                                color: "#f0f6fc"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pointSize: 8
+                            }
+
+                            Text {
+                                Layout.preferredWidth: 70
+                                text: modelData.spo2 + "%"
+                                font.family: "Consolas, monospace"
+                                color: "#7ee787"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.bold: true
+                            }
+
+                            Text {
+                                Layout.preferredWidth: 70
+                                text: modelData.pulse
+                                font.family: "Consolas, monospace"
+                                color: "#ff7b72"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.bold: true
+                            }
+
+                            Text {
+                                Layout.preferredWidth: 80
+                                text: modelData.ageGroup
+                                font.family: "Consolas, monospace"
+                                color: "#58a6ff"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.pointSize: 8
+                            }
+
+                            Text {
+                                Layout.preferredWidth: 70
+                                text: getStatusText(modelData.isNormalRange)
+                                font.family: "Consolas, monospace"
+                                color: getStatusColor(modelData.isNormalRange)
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.bold: true
+                                font.pointSize: 8
+                            }
+
+                            Column {
+                                Layout.preferredWidth: 80
+                                Layout.fillHeight: true
+
+                                Text {
+                                    text: modelData.waveformData ? modelData.waveformData.length + " samples" : "0 samples"
+                                    font.family: "Consolas, monospace"
+                                    color: "#ffa500"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    font.pointSize: 8
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+
+                                Rectangle {
+                                    width: 70
+                                    height: 30
+                                    color: "#0d1117"
+                                    border.color: "#30363d"
+                                    border.width: 1
+                                    radius: 3
+                                    anchors.horizontalCenter: parent.horizontalCenter
+
+                                    Canvas {
+                                        id: miniWaveform
+                                        anchors.fill: parent
+                                        anchors.margins: 2
+
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            if (!ctx || !modelData.waveformData || modelData.waveformData.length === 0) return
+
+                                            ctx.clearRect(0, 0, width, height)
+
+                                            ctx.strokeStyle = "#58a6ff"
+                                            ctx.lineWidth = 1
+                                            ctx.beginPath()
+
+                                            var waveData = modelData.waveformData
+                                            var stepX = width / (waveData.length - 1)
+
+                                            for (var i = 0; i < waveData.length; i++) {
+                                                var x = i * stepX
+                                                var y = height - (waveData[i].value * height * 0.8) - (height * 0.1)
+
+                                                if (i === 0) {
+                                                    ctx.moveTo(x, y)
+                                                } else {
+                                                    ctx.lineTo(x, y)
+                                                }
+                                            }
+                                            ctx.stroke()
+                                        }
+
+                                        Component.onCompleted: {
+                                            if (modelData.waveformData && modelData.waveformData.length > 0) {
+                                                requestPaint()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            // Durum bilgisi
+            // Alt bilgi satırı
             Text {
-                text: measurements.length > 0 ? "Son güncelleme: " + new Date().toLocaleTimeString() : "Henüz veri yok"
+                text: showWaveformData ?
+                    (waveformDatabase.length > 0 ? "Son güncelleme: " + new Date().toLocaleTimeString() : "Henüz waveform verisi yok") :
+                    (measurements.length > 0 ? "Son güncelleme: " + new Date().toLocaleTimeString() : "Henüz veri yok")
                 font.family: "Consolas, monospace"
                 font.pointSize: 8
                 color: "#7ee787"
                 Layout.alignment: Qt.AlignHCenter
             }
 
-            // Butonlar - Yan yana
+            // Alt butonlar
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 20
 
-                // Geri dönüş butonu
                 Button {
-                    id: backButton
                     width: 200
                     height: 40
                     background: Rectangle {
-                        color: backButton.pressed ? "#238636" : (backButton.hovered ? "#2d333b" : "#21262d")
+                        color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
                         radius: 6
                         border.color: "#58a6ff"
                         border.width: 1
@@ -404,18 +659,14 @@ Item {
                         color: "#58a6ff"
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
-                        anchors.fill: parent
                     }
                     onClicked: {
-                        console.log("Ana sayfaya dönülüyor - timer'lar durduruluyor")
-                        // Timer'ları durdur
                         autoUpdateTimer.stop()
                         updateTimer.stop()
                         page2.navigateBack()
                     }
                 }
 
-                // Veri akışı başlat butonu
                 Button {
                     width: 200
                     height: 35

@@ -17,8 +17,7 @@ ApplicationWindow {
     property int spo2Numeric: parseInt(spo2Value) || 0
     property int pulseNumeric: parseInt(pulseValue) || 0
 
-    // Yaş grubu ve normal aralık özellikleri
-    property string currentAgeGroup: "Adult" // varsayılan: Adult (settings.qml ile uyumlu)
+    property string currentAgeGroup: "Adult"
     property int normalMinSpo2: 95
     property int normalMaxSpo2: 100
     property bool isInNormalRange: spo2Numeric >= normalMinSpo2 && spo2Numeric <= normalMaxSpo2
@@ -26,35 +25,24 @@ ApplicationWindow {
     property string alertMessage: ""
     property color alertColor: "#ff7b72"
 
-    // Yaş grubuna göre normal aralıkları güncelleyen fonksiyon
+    // Waveform database için özellikler
+    property var waveformDatabase: []
+    property var currentWaveformSession: []
+    property int maxDatabaseSize: 100 // Maksimum kaydedilecek session sayısı
+    property int sessionDuration: 10000 // 10 saniye (ms)
+
     function updateNormalRanges() {
-        console.log("Yaş grubu güncelleniyor:", currentAgeGroup)
         switch(currentAgeGroup) {
-            case "Adult":
-                normalMinSpo2 = 95
-                normalMaxSpo2 = 100
-                break
-            case "Newborn":
-                normalMinSpo2 = 90
-                normalMaxSpo2 = 94
-                break
-            case "Pediatric":
-                normalMinSpo2 = 94
-                normalMaxSpo2 = 100
-                break
-            default:
-                normalMinSpo2 = 95
-                normalMaxSpo2 = 100
+            case "Adult": normalMinSpo2 = 95; normalMaxSpo2 = 100; break
+            case "Newborn": normalMinSpo2 = 90; normalMaxSpo2 = 94; break
+            case "Pediatric": normalMinSpo2 = 94; normalMaxSpo2 = 100; break
+            default: normalMinSpo2 = 95; normalMaxSpo2 = 100
         }
-        console.log("Normal aralık güncellendi:", normalMinSpo2, "-", normalMaxSpo2)
         checkAlert()
     }
 
-    // Uyarı kontrolü yapan fonksiyon
     function checkAlert() {
-        var wasInRange = isInNormalRange
         isInNormalRange = spo2Numeric >= normalMinSpo2 && spo2Numeric <= normalMaxSpo2
-
         if (!isInNormalRange && spo2Numeric > 0) {
             showAlert = true
             if (spo2Numeric < normalMinSpo2) {
@@ -64,69 +52,72 @@ ApplicationWindow {
                 alertMessage = "SPO2 YÜKSEK! (" + spo2Numeric + "% > " + normalMaxSpo2 + "%)"
                 alertColor = "#ffa500"
             }
-
-            // Uyarı sesini çal (eğer C++ tarafında varsa)
-            if (mainWindow && mainWindow.playAlertSound) {
-                mainWindow.playAlertSound()
-            }
+            if (mainWindow && mainWindow.playAlertSound) mainWindow.playAlertSound()
         } else {
             showAlert = false
             alertMessage = ""
         }
     }
 
-    // SPO2 değeri değiştiğinde uyarı kontrolü
-    onSpo2NumericChanged: {
-        checkAlert()
-    }
-
-    // Yaş grubu değiştiğinde aralıkları güncelle
-    onCurrentAgeGroupChanged: {
-        updateNormalRanges()
-    }
-
-    // Settings sayfasından yaş grubu bilgisini alan fonksiyon
     function updateAgeGroupFromSettings(mode) {
         currentAgeGroup = mode
-        console.log("Settings'den yaş grubu alındı:", mode)
     }
 
-    // Debug için konsol çıktısı ekle
-    Component.onCompleted: {
-        console.log("SPO2 Monitor başlatıldı")
-        console.log("mainWindow mevcut:", mainWindow ? "Evet" : "Hayır")
-        updateNormalRanges()
+    function saveWaveformSession() {
+        if (currentWaveformSession.length > 0) {
+            var sessionData = {
+                timestamp: new Date().toISOString(),
+                duration: sessionDuration,
+                spo2: spo2Value,
+                pulse: pulseValue,
+                ageGroup: currentAgeGroup,
+                waveformData: currentWaveformSession.slice(), // Kopya oluştur
+                isNormalRange: isInNormalRange
+            }
+
+            waveformDatabase.push(sessionData)
+            console.log("Waveform session kaydedildi:", sessionData.timestamp)
+
+            // Database boyutunu kontrol et
+            if (waveformDatabase.length > maxDatabaseSize) {
+                waveformDatabase.shift() // En eski kaydı sil
+            }
+
+            // Yeni session'ı başlat
+            currentWaveformSession = []
+        }
+    }
+
+    function getWaveformDatabase() {
+        return waveformDatabase
+    }
+
+    onSpo2NumericChanged: checkAlert()
+    onCurrentAgeGroupChanged: updateNormalRanges()
+    Component.onCompleted: updateNormalRanges()
+
+    // Waveform session timer - 10 saniyede bir kaydet
+    Timer {
+        id: waveformSessionTimer
+        interval: sessionDuration
+        running: root.isActive
+        repeat: true
+        onTriggered: {
+            saveWaveformSession()
+        }
     }
 
     Connections {
         target: mainWindow
-        function onNavigateBack() {
-            root.showMain2 = false
-            root.showSettings = false
-            root.isActive = true
-        }
-        function onSpo2Changed() {
-            root.spo2Value = mainWindow.spo2
-        }
-        function onPulseChanged() {
-            root.pulseValue = mainWindow.pulse
-        }
-        function onWaveformDataReceived(waveformValue) {
-            waveformCanvas.addWaveformData(waveformValue)
-        }
-        function onWaveformSampleReceived() {
-            waveformCanvas.addWaveformData(mainWindow.waveformSample)
-        }
-        function onSpo2PulseData(spo2, pulse) {
-            root.spo2Value = spo2
-            root.pulseValue = pulse
-        }
-        onRealTimeWaveformPoint: {
-            waveformCanvas.addWaveformData(amplitude)
-        }
+        function onNavigateBack() { root.showMain2 = false; root.showSettings = false; root.isActive = true }
+        function onSpo2Changed() { root.spo2Value = mainWindow.spo2 }
+        function onPulseChanged() { root.pulseValue = mainWindow.pulse }
+        function onWaveformDataReceived(waveformValue) { waveformCanvas.addWaveformData(waveformValue) }
+        function onWaveformSampleReceived() { waveformCanvas.addWaveformData(mainWindow.waveformSample) }
+        function onSpo2PulseData(spo2, pulse) { root.spo2Value = spo2; root.pulseValue = pulse }
+        onRealTimeWaveformPoint: { waveformCanvas.addWaveformData(amplitude) }
     }
 
-    // Uyarı popup'ı
     Rectangle {
         id: alertPopup
         width: parent.width - 40
@@ -151,7 +142,6 @@ ApplicationWindow {
         Column {
             anchors.centerIn: parent
             spacing: 5
-
             Text {
                 text: "⚠️ UYARI!"
                 font.family: "Consolas, monospace"
@@ -160,7 +150,6 @@ ApplicationWindow {
                 color: "#ffffff"
                 anchors.horizontalCenter: parent.horizontalCenter
             }
-
             Text {
                 text: alertMessage
                 font.family: "Consolas, monospace"
@@ -168,7 +157,6 @@ ApplicationWindow {
                 color: "#ffffff"
                 anchors.horizontalCenter: parent.horizontalCenter
             }
-
             Text {
                 text: "Normal Aralık: " + normalMinSpo2 + "%-" + normalMaxSpo2 + "% (" + currentAgeGroup + ")"
                 font.family: "Consolas, monospace"
@@ -180,13 +168,10 @@ ApplicationWindow {
 
         MouseArea {
             anchors.fill: parent
-            onClicked: {
-                showAlert = false
-            }
+            onClicked: showAlert = false
         }
     }
 
-    // Main2 için Loader
     Loader {
         id: pageLoader
         anchors.fill: parent
@@ -198,50 +183,28 @@ ApplicationWindow {
                     root.showMain2 = false
                     root.isActive = true
                 })
+                // Waveform database'ini main2'ye aktar
+                if (item.setWaveformDatabase) {
+                    item.setWaveformDatabase(root.getWaveformDatabase())
+                }
             }
         }
     }
 
-    // Settings için Loader
     Loader {
         id: settingsLoader
         anchors.fill: parent
         source: root.showSettings ? "settings.qml" : ""
         active: root.showSettings
-
-        onActiveChanged: {
-            console.log("settingsLoader aktif durumu değişti:", active)
-        }
-
-        onSourceChanged: {
-            console.log("settingsLoader source değişti:", source)
-        }
-
-        onStatusChanged: {
-            console.log("settingsLoader status değişti:", status)
-            if (status === Loader.Error) {
-                console.log("❌ Settings dosyası yüklenemedi!")
-            } else if (status === Loader.Ready) {
-                console.log("✅ Settings dosyası başarıyla yüklendi")
-            }
-        }
-
         onLoaded: {
-            console.log("Settings sayfası yüklendi")
             if (item) {
-                console.log("Settings item mevcut")
                 item.navigateBack.connect(function() {
-                    console.log("Settings'den geri dönüş sinyali alındı")
                     root.showSettings = false
                     root.isActive = true
                 })
-
-                // Settings sayfasından yaş grubu güncelleme sinyali
                 item.ageGroupChanged.connect(function(ageGroup) {
                     root.updateAgeGroupFromSettings(ageGroup)
                 })
-            } else {
-                console.log("❌ Settings item null!")
             }
         }
     }
@@ -263,7 +226,6 @@ ApplicationWindow {
                 anchors.margins: 15
                 spacing: 12
 
-                // Başlık
                 Rectangle {
                     width: parent.width
                     height: 55
@@ -295,7 +257,6 @@ ApplicationWindow {
                             font.family: "Consolas, monospace"
                             font.pointSize: 11
                             color: "#7d8590"
-
                             Timer {
                                 interval: 1000
                                 running: root.isActive
@@ -314,13 +275,11 @@ ApplicationWindow {
                     }
                 }
 
-                // SPO2 ve Pulse Paneli
                 Row {
                     width: parent.width
                     height: 140
                     spacing: 12
 
-                    // SPO2 Panel
                     Rectangle {
                         width: (parent.width - 12) / 2
                         height: parent.height
@@ -371,7 +330,6 @@ ApplicationWindow {
                         }
                     }
 
-                    // Pulse Panel
                     Rectangle {
                         width: (parent.width - 12) / 2
                         height: parent.height
@@ -423,17 +381,9 @@ ApplicationWindow {
                                         SequentialAnimation on scale {
                                             loops: Animation.Infinite
                                             running: root.pulseNumeric > 0 && root.isActive
-                                            PropertyAnimation {
-                                                from: 1.0; to: 1.5;
-                                                duration: 200
-                                            }
-                                            PropertyAnimation {
-                                                from: 1.5; to: 1.0;
-                                                duration: 200
-                                            }
-                                            PauseAnimation {
-                                                duration: 800
-                                            }
+                                            PropertyAnimation { from: 1.0; to: 1.5; duration: 200 }
+                                            PropertyAnimation { from: 1.5; to: 1.0; duration: 200 }
+                                            PauseAnimation { duration: 800 }
                                         }
                                     }
                                 }
@@ -450,7 +400,6 @@ ApplicationWindow {
                     }
                 }
 
-                // Waveform Panel
                 Rectangle {
                     width: parent.width
                     height: 200
@@ -488,7 +437,6 @@ ApplicationWindow {
                                     height: 8
                                     radius: 4
                                     color: waveformCanvas.isReceivingData ? "#7ee787" : "#ff7b72"
-
                                     SequentialAnimation on opacity {
                                         loops: Animation.Infinite
                                         running: waveformCanvas.isReceivingData
@@ -520,9 +468,19 @@ ApplicationWindow {
                                 var normalizedValue = Math.max(0, Math.min(1, value / 255.0))
                                 waveformData.push(normalizedValue)
 
-                                if (waveformData.length > maxPoints) {
-                                    waveformData.shift()
-                                }
+                                // Current session'a da ekle
+                                root.currentWaveformSession.push({
+                                    timestamp: Date.now(),
+                                    value: normalizedValue,
+                                    spo2: root.spo2Value,
+                                    pulse: root.pulseValue
+                                })
+
+                                if (waveformData.length > maxPoints) waveformData.shift()
+
+                                // Veri alma durumunu güncelle
+                                isReceivingData = true
+                                lastDataTime = Date.now()
 
                                 requestPaint()
                             }
@@ -532,7 +490,6 @@ ApplicationWindow {
                                 if (!ctx) return
 
                                 ctx.clearRect(0, 0, width, height);
-
                                 ctx.fillStyle = "#0d1117";
                                 ctx.fillRect(0, 0, width, height);
 
@@ -569,14 +526,12 @@ ApplicationWindow {
                                     for (let k = 0; k < waveformData.length; k++) {
                                         const x = startX + (k * stepX);
                                         const y = height - (waveformData[k] * height * 0.8) - (height * 0.1);
-
                                         if (k === 0) {
                                             ctx.moveTo(x, y);
                                         } else {
                                             ctx.lineTo(x, y);
                                         }
                                     }
-
                                     ctx.stroke();
                                 }
 
@@ -604,7 +559,6 @@ ApplicationWindow {
                     }
                 }
 
-                // Status Panel
                 Rectangle {
                     width: parent.width
                     height: 60
@@ -722,9 +676,7 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                         }
                         onClicked: {
-                            if (mainWindow) {
-                                mainWindow.stopDataStream()
-                            }
+                            if (mainWindow) mainWindow.stopDataStream()
                             root.isActive = false
                             root.showMain2 = true
                         }
@@ -748,7 +700,6 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                         }
                         onClicked: {
-                            console.log("Settings butonu tıklandı!")
                             root.showSettings = true
                         }
                     }
