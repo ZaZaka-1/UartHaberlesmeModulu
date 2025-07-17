@@ -263,30 +263,16 @@ void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payl
             uint8_t spo2 = static_cast<uint8_t>(payload[3]);
             uint16_t pulse = (static_cast<uint8_t>(payload[4]) << 8) | static_cast<uint8_t>(payload[5]);
 
-            uint8_t mode = 0;
-            uint8_t frequency = 50; // Default value
-            QString modeStr = "Adult";
-            QString frequencyStr = "50Hz";
+            // ✅ DÜZELTME: QML'den gelen currentMode değerini kullan
+            uint8_t mode = currentMode;  // payload'dan değil, QML'den gelen değeri kullan
+            QString modeStr = (mode == 0) ? "Adult" : (mode == 1) ? "Newborn" : (mode == 2) ? "Pediatric" : "Unknown";
 
-            if (payload.size() > 6) {
-                mode = static_cast<uint8_t>(payload[6]);
-                currentMode = mode;
-                modeStr = (mode == 0) ? "Adult" : (mode == 1) ? "Newborn" : (mode == 2) ? "Pediatric" : "Unknown";
-            }
+            // ✅ DÜZELTME: QML'den gelen m_currentFrequency değerini kullan
+            uint8_t frequency = m_currentFrequency;  // payload'dan değil, QML'den gelen değeri kullan
+            QString frequencyStr = QString("%1Hz").arg(frequency);
 
-            // ✅ YENİ: Eğer payload'da frekans bilgisi varsa parse et
-            if (payload.size() > 7) {
-                uint8_t settingByte = static_cast<uint8_t>(payload[7]);
-                // Frekans bilgisi bit 1,0'da
-                uint8_t freqBits = settingByte & 0x03;
-                if (freqBits == 0x02) {
-                    frequency = 50;
-                    frequencyStr = "50Hz";
-                } else if (freqBits == 0x03) {
-                    frequency = 60;
-                    frequencyStr = "60Hz";
-                }
-            }
+            // ✅ DÜZELTME: QML'den gelen currentAveraging değerini kullan
+            QString averagingStr = QString("%1s").arg(currentAveraging);
 
             // Geçerli veri kontrolü ve buffer'a ekleme
             if (isValidSpo2(spo2, mode) && isValidPulse(pulse, mode)) {
@@ -297,20 +283,20 @@ void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payl
                 lastValidPulseStr = QString::number(pulse);
             }
 
-            // ✅ GÜNCELLEME: Debug mesajına frekans bilgisi eklendi
-            qDebug().noquote() << QString("SPO2 (0x15) ➔ SpO2: %1 %% | Pulse: %2 bpm | Waveform: %3 | Mode: %4 (%5) | Freq: %6")
+            // ✅ GÜNCELLEME: Debug mesajında QML'den gelen değerleri kullan
+            qDebug().noquote() << QString("SPO2 (0x15) ➔ SpO2: %1 %% | Pulse: %2 bpm | Waveform: %3 | Mode: %4 (%5) | Freq: %6 | Avg: %7")
                                       .arg(isValidSpo2(spo2, mode) ? QString::number(spo2) : "Geçersiz")
                                       .arg(isValidPulse(pulse, mode) ? QString::number(pulse) : "Geçersiz")
                                       .arg(waveformRaw)
                                       .arg(modeStr)
                                       .arg(mode)
-                                      .arg(frequencyStr);
+                                      .arg(frequencyStr)
+                                      .arg(averagingStr);
 
             m_waveformSample = waveformRaw;
             emit waveformSampleReceived();
             emit waveformDataReceived(waveformRaw);
             emit frequencyReceived(frequency);
-
         }
         break;
     }
