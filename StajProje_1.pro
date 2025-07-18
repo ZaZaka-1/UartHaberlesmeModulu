@@ -1,15 +1,10 @@
 QT       += core gui widgets serialport quick qml quickcontrols2
-
+QT       += sql printsupport
 CONFIG   += c++17
 CONFIG   += qmltypes
 CONFIG   += qtquickcompiler
-
-QT += sql
-
-
 TEMPLATE = app
 TARGET = StajProje_1
-
 QML_IMPORT_NAME = StajProje1
 QML_IMPORT_MAJOR_VERSION = 1
 
@@ -27,4 +22,3 @@ RESOURCES += \
 
 DISTFILES += \
     main.qml
-

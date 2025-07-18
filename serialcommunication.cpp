@@ -10,8 +10,9 @@ SerialCommunication::SerialCommunication(QObject *parent)
     connectionSent(false),
     currentPacketIndex(0),
     errorLogged(false),
-    currentAveraging(4),  // ✅ DÜZELTME: Default değer ekle
-    currentMode(0),       // ✅ DÜZELTME: Default değer ekle
+    m_currentMode(0),
+    m_currentAveraging(4),
+    m_currentFrequency(50),
     lastValidSpo2(0),
     lastValidPulse(0),
     lastValidSpo2Str("0"),
@@ -33,27 +34,20 @@ SerialCommunication::SerialCommunication(QObject *parent)
     connectionTimer = new QTimer(this);
     dataRequestTimer = new QTimer(this);
     sequentialTimer = new QTimer(this);
-
     averagingTimer = new QTimer(this);
+
     averagingTimer->setSingleShot(false);
     averagingTimer->setInterval(1000); // Her saniye kontrol et
-
-    connect(averagingTimer, &QTimer::timeout, this, &SerialCommunication::processAveraging);
-    averagingTimer->start();
-    averagingTimer = new QTimer(this);
-    averagingTimer->setSingleShot(false);
-    averagingTimer->setInterval(1000); // Her saniye kontrol et
-
     connectionTimer->setSingleShot(true);
     dataRequestTimer->setSingleShot(false);
     sequentialTimer->setSingleShot(true);
 
     connect(averagingTimer, &QTimer::timeout, this, &SerialCommunication::processAveraging);
-    averagingTimer->start();
     connect(connectionTimer, &QTimer::timeout, this, &SerialCommunication::sendConnectionSequence);
     connect(dataRequestTimer, &QTimer::timeout, this, &SerialCommunication::startSequentialRequests);
     connect(sequentialTimer, &QTimer::timeout, this, &SerialCommunication::sendNextPacket);
 
+    averagingTimer->start();
     packetCommands = createIndividualCommands();
 
     // Port açık değilse bile timer'ları başlat
@@ -77,7 +71,7 @@ void SerialCommunication::openSerialPort()
             firstTry = false;
         }
         emit connectionStatusChanged(false);
-        return; // Yeniden deneme yapma
+        return;
     } else {
         qDebug() << "Seri port başarıyla açıldı.";
         emit connectionStatusChanged(true);
@@ -224,8 +218,6 @@ void SerialCommunication::parseBufferedData()
     }
 }
 
-// serialcommunication.cpp içindeki parsePacketByCode fonksiyonunu değiştirin:
-
 void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payload)
 {
     // Bu kodlar için debug mesajını kaldır: 0x02, 0x15, 0x0B, 0x01, 0x06, 0x05, 0x07, 0x03
@@ -263,19 +255,12 @@ void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payl
             uint8_t spo2 = static_cast<uint8_t>(payload[3]);
             uint16_t pulse = (static_cast<uint8_t>(payload[4]) << 8) | static_cast<uint8_t>(payload[5]);
 
-            // ✅ DÜZELTME: QML'den gelen currentMode değerini kullan
-            uint8_t mode = currentMode;  // payload'dan değil, QML'den gelen değeri kullan
-            QString modeStr = (mode == 0) ? "Adult" : (mode == 1) ? "Newborn" : (mode == 2) ? "Pediatric" : "Unknown";
-
-            // ✅ DÜZELTME: QML'den gelen m_currentFrequency değerini kullan
-            uint8_t frequency = m_currentFrequency;  // payload'dan değil, QML'den gelen değeri kullan
-            QString frequencyStr = QString("%1Hz").arg(frequency);
-
-            // ✅ DÜZELTME: QML'den gelen currentAveraging değerini kullan
-            QString averagingStr = QString("%1s").arg(currentAveraging);
+            QString modeStr = (m_currentMode == 0) ? "Adult" : (m_currentMode == 1) ? "Newborn" : (m_currentMode == 2) ? "Pediatric" : "Unknown";
+            QString frequencyStr = QString("%1Hz").arg(m_currentFrequency);
+            QString averagingStr = QString("%1s").arg(m_currentAveraging);
 
             // Geçerli veri kontrolü ve buffer'a ekleme
-            if (isValidSpo2(spo2, mode) && isValidPulse(pulse, mode)) {
+            if (isValidSpo2(spo2, m_currentMode) && isValidPulse(pulse, m_currentMode)) {
                 addToBuffer(spo2, pulse);
                 lastValidSpo2 = spo2;
                 lastValidPulse = pulse;
@@ -283,20 +268,22 @@ void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payl
                 lastValidPulseStr = QString::number(pulse);
             }
 
-            // ✅ GÜNCELLEME: Debug mesajında QML'den gelen değerleri kullan
+            // Waveform verisi için buffer güncelleme
+            updateWaveformBuffer(waveformRaw);
+
             qDebug().noquote() << QString("SPO2 (0x15) ➔ SpO2: %1 %% | Pulse: %2 bpm | Waveform: %3 | Mode: %4 (%5) | Freq: %6 | Avg: %7")
-                                      .arg(isValidSpo2(spo2, mode) ? QString::number(spo2) : "Geçersiz")
-                                      .arg(isValidPulse(pulse, mode) ? QString::number(pulse) : "Geçersiz")
+                                      .arg(isValidSpo2(spo2, m_currentMode) ? QString::number(spo2) : "Geçersiz")
+                                      .arg(isValidPulse(pulse, m_currentMode) ? QString::number(pulse) : "Geçersiz")
                                       .arg(waveformRaw)
                                       .arg(modeStr)
-                                      .arg(mode)
+                                      .arg(m_currentMode)
                                       .arg(frequencyStr)
                                       .arg(averagingStr);
 
             m_waveformSample = waveformRaw;
-            emit waveformSampleReceived();
+            emit waveformSampleChanged();
             emit waveformDataReceived(waveformRaw);
-            emit frequencyReceived(frequency);
+            emit frequencyChanged(m_currentFrequency);
         }
         break;
     }
@@ -307,6 +294,20 @@ void SerialCommunication::parsePacketByCode(uint8_t code, const QByteArray &payl
 
     // Genel data received sinyali
     emit dataReceived(code, payload);
+}
+
+void SerialCommunication::updateWaveformBuffer(uint8_t waveformValue)
+{
+    // Waveform buffer'ına yeni veri ekle
+    m_waveformBuffer.append(static_cast<int>(waveformValue));
+
+    // Buffer boyutunu sınırla
+    if (m_waveformBuffer.size() > MAX_WAVEFORM_BUFFER_SIZE) {
+        m_waveformBuffer.removeFirst();
+    }
+
+    // Buffer güncellendiğini bildir
+    emit waveformBufferUpdated();
 }
 
 void SerialCommunication::handleError(QSerialPort::SerialPortError error)
@@ -383,7 +384,6 @@ void SerialCommunication::stopDataStream()
         serial->close();
     }
 
-
     // Bayrakları sıfırla
     connectionSent = false;
 
@@ -391,18 +391,30 @@ void SerialCommunication::stopDataStream()
 
     emit connectionStatusChanged(false);
 
+    // Buffer'ları temizle
     spo2Buffer.clear();
     pulseBuffer.clear();
+    m_waveformBuffer.clear();
 }
+
 void SerialCommunication::sendSpo2Settings(int frequency, int mode, int averaging) {
     qDebug() << "=== sendSpo2Settings BAŞLADI ===";
     qDebug() << "Parametreler - Freq:" << frequency << "Mode:" << mode << "Avg:" << averaging;
     qDebug() << "Seri port durumu:" << (serial->isOpen() ? "AÇIK" : "KAPALI");
 
-    // Frekans değerini güncelle
-    m_currentFrequency = frequency;
-    currentMode = mode;
-    currentAveraging = averaging;
+    // Değerleri güncelle ve sinyalleri gönder
+    if (frequency != m_currentFrequency) {
+        m_currentFrequency = frequency;
+        emit frequencyChanged(frequency);
+    }
+    if (mode != m_currentMode) {
+        m_currentMode = mode;
+        emit modeChanged(mode);
+    }
+    if (averaging != m_currentAveraging) {
+        m_currentAveraging = averaging;
+        emit averagingChanged(averaging);
+    }
 
     // Averaging timer'ının interval'ini güncelle
     if (averagingTimer) {
@@ -420,6 +432,7 @@ void SerialCommunication::sendSpo2Settings(int frequency, int mode, int averagin
     // Buffer'ları temizle ve yeniden başlat
     spo2Buffer.clear();
     pulseBuffer.clear();
+    m_waveformBuffer.clear();
     lastValidSpo2 = 0;
     lastValidPulse = 0;
     lastValidSpo2Str = "0";
@@ -443,7 +456,6 @@ void SerialCommunication::sendSpo2Settings(int frequency, int mode, int averagin
                     .arg(settingByte, 2, 16, QLatin1Char('0')).toUpper();
     qDebug() << "Gönderilen paket:" << packet.toHex(' ').toUpper();
 }
-
 
 uint8_t SerialCommunication::calculateSpo2SettingByte(int frequency, int mode, int averaging)
 {
@@ -505,10 +517,9 @@ void SerialCommunication::processAveraging()
         return;
     }
 
-    // ✅ DÜZELTME: currentAveraging değerini kullan
-    int maxBufferSize = currentAveraging; // QML'den gelen averaging değeri
+    int maxBufferSize = m_currentAveraging;
 
-    qDebug() << "processAveraging çalışıyor - currentAveraging:" << currentAveraging
+    qDebug() << "processAveraging çalışıyor - currentAveraging:" << m_currentAveraging
              << "Buffer size:" << spo2Buffer.size() << "Max size:" << maxBufferSize;
 
     // Buffer boyutunu sınırla
@@ -519,8 +530,7 @@ void SerialCommunication::processAveraging()
         pulseBuffer.removeFirst();
     }
 
-    // ✅ DÜZELTME: Minimum sample sayısını averaging'e göre ayarla
-    int minSamples = qMax(1, currentAveraging / 2); // En az averaging/2 sample olsun
+    int minSamples = qMax(1, m_currentAveraging / 2);
 
     if (spo2Buffer.size() >= minSamples && pulseBuffer.size() >= minSamples) {
         double avgSpo2 = 0;
@@ -540,7 +550,7 @@ void SerialCommunication::processAveraging()
         emit spo2PulseData(QString::number(qRound(avgSpo2)), QString::number(qRound(avgPulse)));
 
         qDebug().noquote() << QString("ORTALAMA (%1s) ➔ SpO2: %2%% | Pulse: %3 bpm | Buffer: %4/%5 samples")
-                                  .arg(currentAveraging)
+                                  .arg(m_currentAveraging)
                                   .arg(qRound(avgSpo2))
                                   .arg(qRound(avgPulse))
                                   .arg(spo2Buffer.size())
@@ -569,29 +579,51 @@ bool SerialCommunication::isValidSpo2(uint8_t spo2, uint8_t mode)
 }
 
 bool SerialCommunication::isValidPulse(uint16_t pulse, uint8_t mode)
+
 {
+
     switch (mode) {
+
     case 0: // Adult
+
         return !(pulse > 240 || pulse < 30 || pulse == 0 || pulse == 0xFFFF);
+
     case 1: // Newborn
+
         return !(pulse > 180 || pulse < 80 || pulse == 0 || pulse == 0xFFFF);
+
     case 2: // Pediatric
+
         return !(pulse > 200 || pulse < 60 || pulse == 0 || pulse == 0xFFFF);
+
     default:
+
         return !(pulse > 240 || pulse < 30 || pulse == 0 || pulse == 0xFFFF);
+
     }
+
 }
 
 void SerialCommunication::addToBuffer(uint8_t spo2, uint16_t pulse)
+
 {
+
     spo2Buffer.append(spo2);
+
     pulseBuffer.append(pulse);
 
     // Buffer boyutunu kontrol et (maksimum 60 saniye veri)
+
     if (spo2Buffer.size() > 60) {
+
         spo2Buffer.removeFirst();
+
     }
+
     if (pulseBuffer.size() > 60) {
+
         pulseBuffer.removeFirst();
+
     }
+
 }
