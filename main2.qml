@@ -6,6 +6,7 @@ Item {
     id: page2
     signal navigateBack()
 
+    property bool showImages: true
     property var measurements: []
     property bool updatePending: false
     property var seenTimestamps: ({})
@@ -32,6 +33,15 @@ Item {
         if (typeof root !== 'undefined' && root.getWaveformDatabase) {
             waveformDatabase = root.getWaveformDatabase()
             console.log("Waveform database yüklendi - " + waveformDatabase.length + " session")
+
+            // DEBUG: İlk veriyi kontrol et
+            if (waveformDatabase.length > 0) {
+                var first = waveformDatabase[0]
+                console.log("İlk waveform verisi:")
+                console.log("- imagePath:", first.imagePath)
+                console.log("- imageData:", first.imageData ? "Var (" + first.imageData.length + " karakter)" : "Yok")
+                console.log("- timestamp:", first.timestamp)
+            }
         }
     }
 
@@ -198,6 +208,30 @@ Item {
                             loadWaveformData()
                         }
                     }
+
+                    Button {
+                            text: showImages ? "Görselleri Gizle" : "Görselleri Göster"
+                            width: 120
+                            height: 30
+                            visible: showWaveformData
+                            background: Rectangle {
+                                color: parent.pressed ? "#238636" : (parent.hovered ? "#2d333b" : "#21262d")
+                                radius: 6
+                                border.color: "#e3b341"
+                                border.width: 1
+                            }
+                            contentItem: Text {
+                                text: parent.text
+                                font.family: "Consolas, monospace"
+                                font.pointSize: 8
+                                color: "#e3b341"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            onClicked: {
+                                showImages = !showImages
+                            }
+                        }
 
                     Button {
                         text: autoUpdateTimer.running ? "Dur" : "Başlat"
@@ -491,132 +525,208 @@ Item {
 
                     delegate: Rectangle {
                         width: waveformList.width
-                        height: 80
+                        height: showImages ? 300 : 80
                         color: index % 2 === 0 ? "#161b22" : "#0d1117"
                         border.color: "#30363d"
                         border.width: 1
 
-                        RowLayout {
+                        Column {
                             anchors.fill: parent
                             anchors.margins: 5
+                            spacing: 5
 
-                            Text {
-                                Layout.preferredWidth: 50
-                                text: index + 1
-                                font.family: "Consolas, monospace"
-                                color: "#f0f6fc"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Text {
-                                Layout.preferredWidth: 120
-                                text: formatTimestamp(modelData.timestamp)
-                                font.family: "Consolas, monospace"
-                                color: "#f0f6fc"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.pointSize: 8
-                            }
-
-                            Text {
-                                Layout.preferredWidth: 70
-                                text: modelData.spo2 + "%"
-                                font.family: "Consolas, monospace"
-                                color: "#7ee787"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.bold: true
-                            }
-
-                            Text {
-                                Layout.preferredWidth: 70
-                                text: modelData.pulse
-                                font.family: "Consolas, monospace"
-                                color: "#ff7b72"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.bold: true
-                            }
-
-                            Text {
-                                Layout.preferredWidth: 80
-                                text: modelData.ageGroup
-                                font.family: "Consolas, monospace"
-                                color: "#58a6ff"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.pointSize: 8
-                            }
-
-                            Text {
-                                Layout.preferredWidth: 70
-                                text: getStatusText(modelData.isNormalRange)
-                                font.family: "Consolas, monospace"
-                                color: getStatusColor(modelData.isNormalRange)
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.bold: true
-                                font.pointSize: 8
-                            }
-
-                            Column {
-                                Layout.preferredWidth: 80
-                                Layout.fillHeight: true
+                            // Üst bilgi satırı
+                            RowLayout {
+                                width: parent.width
+                                height: 70
 
                                 Text {
-                                    text: modelData.waveformData ? modelData.waveformData.length + " samples" : "0 samples"
+                                    Layout.preferredWidth: 50
+                                    text: index + 1
                                     font.family: "Consolas, monospace"
-                                    color: "#ffa500"
+                                    color: "#f0f6fc"
                                     horizontalAlignment: Text.AlignHCenter
-                                    font.pointSize: 8
-                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    verticalAlignment: Text.AlignVCenter
                                 }
 
-                                Rectangle {
-                                    width: 70
-                                    height: 30
-                                    color: "#0d1117"
-                                    border.color: "#30363d"
-                                    border.width: 1
-                                    radius: 3
-                                    anchors.horizontalCenter: parent.horizontalCenter
+                                Text {
+                                    Layout.preferredWidth: 120
+                                    text: formatTimestamp(modelData.timestamp)
+                                    font.family: "Consolas, monospace"
+                                    color: "#f0f6fc"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pointSize: 8
+                                }
 
-                                    Canvas {
-                                        id: miniWaveform
-                                        anchors.fill: parent
-                                        anchors.margins: 2
+                                Text {
+                                    Layout.preferredWidth: 70
+                                    text: modelData.spo2 + "%"
+                                    font.family: "Consolas, monospace"
+                                    color: "#7ee787"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.bold: true
+                                }
 
-                                        onPaint: {
-                                            var ctx = getContext("2d")
-                                            if (!ctx || !modelData.waveformData || modelData.waveformData.length === 0) return
+                                Text {
+                                    Layout.preferredWidth: 70
+                                    text: modelData.pulse
+                                    font.family: "Consolas, monospace"
+                                    color: "#ff7b72"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.bold: true
+                                }
 
-                                            ctx.clearRect(0, 0, width, height)
+                                Text {
+                                    Layout.preferredWidth: 80
+                                    text: modelData.ageGroup
+                                    font.family: "Consolas, monospace"
+                                    color: "#58a6ff"
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.pointSize: 8
+                                }
 
-                                            ctx.strokeStyle = "#58a6ff"
-                                            ctx.lineWidth = 1
-                                            ctx.beginPath()
+                                Text {
+                                    Layout.preferredWidth: 70
+                                    text: getStatusText(modelData.isNormalRange)
+                                    font.family: "Consolas, monospace"
+                                    color: getStatusColor(modelData.isNormalRange)
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font.bold: true
+                                    font.pointSize: 8
+                                }
 
-                                            var waveData = modelData.waveformData
-                                            var stepX = width / (waveData.length - 1)
+                                Column {
+                                    Layout.preferredWidth: 80
+                                    Layout.fillHeight: true
 
-                                            for (var i = 0; i < waveData.length; i++) {
-                                                var x = i * stepX
-                                                var y = height - (waveData[i].value * height * 0.8) - (height * 0.1)
+                                    Text {
+                                        text: modelData.waveformData ? modelData.waveformData.length + " samples" : "0 samples"
+                                        font.family: "Consolas, monospace"
+                                        color: "#ffa500"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        font.pointSize: 8
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                    }
 
-                                                if (i === 0) {
-                                                    ctx.moveTo(x, y)
-                                                } else {
-                                                    ctx.lineTo(x, y)
+                                    Rectangle {
+                                        width: 70
+                                        height: 30
+                                        color: "#0d1117"
+                                        border.color: "#30363d"
+                                        border.width: 1
+                                        radius: 3
+                                        anchors.horizontalCenter: parent.horizontalCenter
+
+                                        Canvas {
+                                            id: miniWaveform
+                                            anchors.fill: parent
+                                            anchors.margins: 2
+
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                if (!ctx || !modelData.waveformData || modelData.waveformData.length === 0) return
+
+                                                ctx.clearRect(0, 0, width, height)
+
+                                                ctx.strokeStyle = "#58a6ff"
+                                                ctx.lineWidth = 1
+                                                ctx.beginPath()
+
+                                                var waveData = modelData.waveformData
+                                                var stepX = width / (waveData.length - 1)
+
+                                                for (var i = 0; i < waveData.length; i++) {
+                                                    var x = i * stepX
+                                                    var y = height - (waveData[i].value * height * 0.8) - (height * 0.1)
+
+                                                    if (i === 0) {
+                                                        ctx.moveTo(x, y)
+                                                    } else {
+                                                        ctx.lineTo(x, y)
+                                                    }
+                                                }
+                                                ctx.stroke()
+                                            }
+
+                                            Component.onCompleted: {
+                                                if (modelData.waveformData && modelData.waveformData.length > 0) {
+                                                    requestPaint()
                                                 }
                                             }
-                                            ctx.stroke()
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Waveform görseli
+                            Rectangle {
+                                width: parent.width - 10
+                                height: 200
+                                color: "#0d1117"
+                                border.color: "#30363d"
+                                border.width: 1
+                                radius: 6
+                                visible: showImages && (modelData.imagePath || modelData.imageData)
+                                anchors.horizontalCenter: parent.horizontalCenter
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 5
+
+                                    Text {
+                                        text: "Waveform Görseli - Session " + (index + 1)
+                                        font.family: "Consolas, monospace"
+                                        font.bold: true
+                                        color: "#58a6ff"
+                                        font.pointSize: 9
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        color: "#161b22"
+                                        border.color: "#58a6ff"
+                                        border.width: 1
+                                        radius: 4
+
+                                        Image {
+                                            id: waveformImage
+                                            anchors.fill: parent
+                                            anchors.margins: 2
+                                            fillMode: Image.PreserveAspectFit
+                                            smooth: true
+
+                                            source: {
+                                                if (modelData.imagePath) {
+                                                    return "file:///" + modelData.imagePath
+                                                } else if (modelData.imageData) {
+                                                    return "data:image/png;base64," + modelData.imageData
+                                                } else {
+                                                    return ""
+                                                }
+                                            }
+
+                                            onStatusChanged: {
+                                                if (status === Image.Error) {
+                                                    console.log("Görsel yükleme hatası: " + source)
+                                                }
+                                            }
                                         }
 
-                                        Component.onCompleted: {
-                                            if (modelData.waveformData && modelData.waveformData.length > 0) {
-                                                requestPaint()
-                                            }
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Görsel Yüklenemedi"
+                                            font.family: "Consolas, monospace"
+                                            color: "#ff6b6b"
+                                            font.pointSize: 10
+                                            visible: waveformImage.status === Image.Error || waveformImage.source === ""
                                         }
                                     }
                                 }

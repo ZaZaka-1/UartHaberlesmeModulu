@@ -44,6 +44,7 @@ class MainWindow : public QObject
     Q_PROPERTY(bool isRecordingSession READ isRecordingSession NOTIFY recordingSessionChanged)
 
 public:
+    Q_INVOKABLE void exportToPdfFromBase64(const QString &base64Png);
     explicit MainWindow(QObject *parent = nullptr);
     ~MainWindow();
 
@@ -80,6 +81,12 @@ public:
     Q_INVOKABLE void startWaveformSession();
     Q_INVOKABLE void stopWaveformSession();
     Q_INVOKABLE QString exportSessionToPdf();
+
+
+    void generatePdfReport(const QString &spo2, const QString &pulse,
+                           const QString &status, bool isNormalRange,
+                           const QString &date, const QString &time,
+                           const QString &patientName);
 
 signals:
     void spo2Changed();

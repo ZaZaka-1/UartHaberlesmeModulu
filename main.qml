@@ -9,6 +9,9 @@ ApplicationWindow {
     title: "SPO2 Monitor"
     color: "#0a0e14"
 
+
+    property bool isExportingPdf: false
+    property string lastExportedImagePath: ""
     property bool isActive: true
     property bool showMain2: false
     property bool showSettings: false
@@ -30,6 +33,28 @@ ApplicationWindow {
     property var currentWaveformSession: []
     property int maxDatabaseSize: 100 // Maksimum kaydedilecek session sayısı
     property int sessionDuration: 10000 // 10 saniye (ms)
+
+    function exportWaveformToPdf() {
+        isExportingPdf = true
+
+        // Canvas'ı yeniden çiz
+        waveformCanvas.requestPaint()
+
+        // Kısa gecikme sonrası görüntüyü al
+        exportTimer.start()
+    }
+    function generateCurrentWaveformImage() {
+        // Canvas'tan güncel görüntüyü al
+        waveformCanvas.requestPaint()
+
+        // Kısa gecikme sonrası görüntüyü oluştur
+        Qt.callLater(function() {
+            var imageData = waveformCanvas.toDataURL("image/png")
+            if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
+                pageLoader.item.setCurrentWaveformImage(imageData)
+            }
+        })
+    }
 
     function updateNormalRanges() {
         switch(currentAgeGroup) {
@@ -118,6 +143,46 @@ ApplicationWindow {
         onRealTimeWaveformPoint: { waveformCanvas.addWaveformData(amplitude) }
     }
 
+    Timer {
+        id: exportTimer
+        interval: 200
+        repeat: false
+        onTriggered: {
+            // Canvas'tan görüntüyü al
+            var imageData = waveformCanvas.toDataURL("image/png")
+
+            if (imageData && imageData.length > 0) {
+                console.log("Waveform görüntüsü oluşturuldu")
+
+                // Base64 verisini temizle (data:image/png;base64, kısmını çıkar)
+                var base64Data = imageData.split(',')[1]
+
+                // C++ tarafına gönder - hem waveform hem de hasta bilgilerini
+                if (mainWindow && mainWindow.exportToPdfWithWaveform) {
+                    var patientData = {
+                        spo2: root.spo2Value,
+                        pulse: root.pulseValue,
+                        ageGroup: root.currentAgeGroup,
+                        timestamp: new Date().toISOString(),
+                        normalRange: normalMinSpo2 + "-" + normalMaxSpo2 + "%",
+                        status: isInNormalRange ? "NORMAL" : "CRITICAL"
+                    }
+
+                    mainWindow.exportToPdfWithWaveform(base64Data, JSON.stringify(patientData))
+                } else if (mainWindow && mainWindow.exportToPdfFromBase64) {
+                    // Fallback - sadece görüntü
+                    mainWindow.exportToPdfFromBase64(base64Data)
+                } else {
+                    console.error("PDF export fonksiyonu bulunamadı!")
+                }
+            } else {
+                console.error("Waveform görüntüsü oluşturulamadı!")
+            }
+
+            isExportingPdf = false
+        }
+    }
+
     Rectangle {
         id: alertPopup
         width: parent.width - 40
@@ -186,6 +251,12 @@ ApplicationWindow {
                 // Waveform database'ini main2'ye aktar
                 if (item.setWaveformDatabase) {
                     item.setWaveformDatabase(root.getWaveformDatabase())
+                }
+
+                // BURAYA EKLE - Waveform görüntüsünü gönder
+                if (item.setCurrentWaveformImage) {
+                    var imageData = waveformCanvas.toDataURL("image/png")
+                    item.setCurrentWaveformImage(imageData)
                 }
             }
         }
@@ -536,11 +607,25 @@ ApplicationWindow {
                                 }
 
                                 if (waveformData.length === 0 || !isReceivingData) {
-                                    ctx.fillStyle = "#7d8590";
-                                    ctx.font = "12px Consolas, monospace";
-                                    ctx.textAlign = "center";
-                                    ctx.fillText("Waiting for waveform data...", width/2, height/2);
-                                }
+                                        ctx.fillStyle = "#7d8590";
+                                        ctx.font = "12px Consolas, monospace";
+                                        ctx.textAlign = "center";
+                                        ctx.fillText("Waiting for waveform data...", width/2, height/2);
+                                    }
+
+                                if (isExportingPdf) {
+                                        // Başlık
+                                        ctx.fillStyle = "#58a6ff";
+                                        ctx.font = "bold 16px Consolas, monospace";
+                                        ctx.textAlign = "left";
+                                        ctx.fillText("SpO₂ Plethysmograph - " + new Date().toLocaleString(), 10, 25);
+
+                                        // Hasta bilgileri
+                                        ctx.font = "12px Consolas, monospace";
+                                        ctx.fillText("SpO₂: " + root.spo2Value + "% | Pulse: " + root.pulseValue + " BPM", 10, 45);
+                                        ctx.fillText("Age Group: " + root.currentAgeGroup + " | Status: " + (isInNormalRange ? "NORMAL" : "CRITICAL"), 10, 60);
+                                        ctx.fillText("Normal Range: " + normalMinSpo2 + "-" + normalMaxSpo2 + "%", 10, 75);
+                                    }
                             }
 
                             Timer {
@@ -677,6 +762,10 @@ ApplicationWindow {
                         }
                         onClicked: {
                             if (mainWindow) mainWindow.stopDataStream()
+
+                            // Önce waveform görüntüsünü oluştur
+                            generateCurrentWaveformImage()
+
                             root.isActive = false
                             root.showMain2 = true
                         }
@@ -702,6 +791,26 @@ ApplicationWindow {
                         onClicked: {
                             root.showSettings = true
                         }
+                    }
+
+                    Button {
+                        width: 120
+                        height: 35
+                        background: Rectangle {
+                            color: parent.pressed ? "#10b981" : "#21262d"
+                            radius: 6
+                            border.color: "#58a6ff"
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: isExportingPdf ? "Kaydediliyor..." : "PDF Kaydet"
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 10
+                            color: "#58a6ff"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: exportWaveformToPdf()
                     }
                 }
             }

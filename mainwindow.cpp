@@ -18,6 +18,12 @@
 #include <QApplication>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QImage>
+#include <QBuffer>
+#include <QPdfWriter>
+#include <QPainter>
+#include <QDateTime>
+
 
 MainWindow::MainWindow(QObject *parent)
     : QObject(parent),
@@ -851,6 +857,44 @@ void MainWindow::generatePdfReport(const QString &spo2, const QString &pulse,
     } catch (const std::exception& e) {
         emit pdfExportError(QString("PDF oluşturulurken hata: %1").arg(e.what()));
     }
+}
+
+void MainWindow::exportToPdfFromBase64(const QString &base64Png) {
+    QByteArray imageData = QByteArray::fromBase64(base64Png.toUtf8());
+    QImage image;
+    if (!image.loadFromData(imageData, "PNG")) {
+        emit pdfExportError("PNG verisi çözümlenemedi.");
+        return;
+    }
+
+    QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QString fileName = "waveform_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".pdf";
+    QString filePath = defaultDir + "/" + fileName;
+
+    QPdfWriter writer(filePath);
+    writer.setPageSize(QPageSize::A4);
+    writer.setResolution(300);
+
+    QPainter painter(&writer);
+    QRect rect = painter.viewport();
+
+    // Görseli sayfaya sığacak şekilde ölçeklendir
+    QSize imageSize = image.size();
+    imageSize.scale(rect.size(), Qt::KeepAspectRatio);
+
+    painter.setViewport(rect.x(), rect.y(), imageSize.width(), imageSize.height());
+    painter.setWindow(image.rect());
+    painter.drawImage(0, 0, image);
+
+    // Ek bilgileri ekleyebilirsiniz (isteğe bağlı)
+    painter.setFont(QFont("Arial", 12));
+    painter.drawText(rect, Qt::AlignBottom | Qt::AlignLeft,
+                     QString("SPO2: %1% | Pulse: %2 bpm").arg(m_spo2).arg(m_pulse));
+
+    painter.end();
+
+    emit pdfExportCompleted(filePath);
+    qDebug() << "PDF başarıyla kaydedildi:" << filePath;
 }
 
 
