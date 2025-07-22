@@ -782,7 +782,6 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                         }
                         onClicked: {
-                            if (mainWindow) mainWindow.stopDataStream()
 
                             // Önce waveform görüntüsünü oluştur
                             generateCurrentWaveformImage()

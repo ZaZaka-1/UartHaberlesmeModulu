@@ -511,16 +511,29 @@ uint8_t SerialCommunication::calculateSpo2SettingByte(int frequency, int mode, i
 
 void SerialCommunication::processAveraging()
 {
+    static int callCount = 0;
+    callCount++;
+
+    qDebug() << QString("processAveraging çağrı #%1 - Buffer sizes: SpO2=%2, Pulse=%3, Target=%4")
+                    .arg(callCount)
+                    .arg(spo2Buffer.size())
+                    .arg(pulseBuffer.size())
+                    .arg(m_currentAveraging);
+
+    // DÜZELTME 1: Buffer boşsa son geçerli değerleri kullan
     if (spo2Buffer.isEmpty() || pulseBuffer.isEmpty()) {
-        // Buffer boşsa son geçerli değerleri gönder
-        emit spo2PulseData(lastValidSpo2Str, lastValidPulseStr);
+        qDebug() << "Buffer boş - Son geçerli değerler kullanılıyor";
+
+        // Eğer daha önce geçerli değerler varsa onları gönder
+        if (lastValidSpo2 > 0 && lastValidPulse > 0) {
+            emit spo2PulseData(lastValidSpo2Str, lastValidPulseStr);
+            qDebug() << "Son geçerli değerler gönderildi:" << lastValidSpo2Str << lastValidPulseStr;
+        }
         return;
     }
 
     int maxBufferSize = m_currentAveraging;
-
-    qDebug() << "processAveraging çalışıyor - currentAveraging:" << m_currentAveraging
-             << "Buffer size:" << spo2Buffer.size() << "Max size:" << maxBufferSize;
+    int minSamples = qMax(1, m_currentAveraging / 2);
 
     // Buffer boyutunu sınırla
     while (spo2Buffer.size() > maxBufferSize) {
@@ -530,8 +543,7 @@ void SerialCommunication::processAveraging()
         pulseBuffer.removeFirst();
     }
 
-    int minSamples = qMax(1, m_currentAveraging / 2);
-
+    // Sadece yeterli veri varsa ortalama hesapla
     if (spo2Buffer.size() >= minSamples && pulseBuffer.size() >= minSamples) {
         double avgSpo2 = 0;
         double avgPulse = 0;
@@ -546,21 +558,62 @@ void SerialCommunication::processAveraging()
         }
         avgPulse /= pulseBuffer.size();
 
-        // Ortalama değerleri gönder
-        emit spo2PulseData(QString::number(qRound(avgSpo2)), QString::number(qRound(avgPulse)));
+        int roundedSpo2 = qRound(avgSpo2);
+        int roundedPulse = qRound(avgPulse);
 
-        qDebug().noquote() << QString("ORTALAMA (%1s) ➔ SpO2: %2%% | Pulse: %3 bpm | Buffer: %4/%5 samples")
-                                  .arg(m_currentAveraging)
-                                  .arg(qRound(avgSpo2))
-                                  .arg(qRound(avgPulse))
-                                  .arg(spo2Buffer.size())
-                                  .arg(maxBufferSize);
+        // DÜZELTME 2: Değer kontrolünü daha esnek hale getir
+        static int lastSentSpo2 = -1;
+        static int lastSentPulse = -1;
+        static int noChangeCounter = 0; // Değişmeyen veri sayacı
+
+        bool shouldSend = false;
+
+        // Değer değiştiyse kesinlikle gönder
+        if (roundedSpo2 != lastSentSpo2 || roundedPulse != lastSentPulse) {
+            shouldSend = true;
+            noChangeCounter = 0;
+        } else {
+            // Değer değişmediyse, her 5 saniyede bir yine gönder (süreklilik için)
+            noChangeCounter++;
+            if (noChangeCounter >= 5) { // 5 saniye = 5 çağrı (1 saniyede 1 çağrı)
+                shouldSend = true;
+                noChangeCounter = 0;
+                qDebug() << "Aynı değer ama 5 saniye geçti - Yine gönderiliyor";
+            }
+        }
+
+        if (shouldSend) {
+            lastSentSpo2 = roundedSpo2;
+            lastSentPulse = roundedPulse;
+
+            emit spo2PulseData(QString::number(roundedSpo2), QString::number(roundedPulse));
+
+            qDebug().noquote() << QString("✓ ORTALAMA GÖNDERİLDİ (%1s) ➔ SpO2: %2%% | Pulse: %3 bpm | Samples: %4/%5")
+                                      .arg(m_currentAveraging)
+                                      .arg(roundedSpo2)
+                                      .arg(roundedPulse)
+                                      .arg(spo2Buffer.size())
+                                      .arg(maxBufferSize);
+        } else {
+            qDebug() << "Aynı değer - Bekleniyor... Counter:" << noChangeCounter;
+        }
     } else {
-        // Yeterli veri yoksa son geçerli değerleri gönder
-        emit spo2PulseData(lastValidSpo2Str, lastValidPulseStr);
+        qDebug() << QString("Yeterli veri yok - minSamples: %1, mevcut: %2")
+        .arg(minSamples)
+            .arg(spo2Buffer.size());
 
-        qDebug() << "Yeterli sample yok - minSamples:" << minSamples
-                 << "mevcut:" << spo2Buffer.size() << "- Son geçerli değerler gönderildi";
+        // DÜZELTME 3: Yeterli veri yoksa da son geçerli değerleri kullan
+        if (lastValidSpo2 > 0 && lastValidPulse > 0) {
+            static int insufficientDataCounter = 0;
+            insufficientDataCounter++;
+
+            // Her 3 saniyede bir son geçerli değerleri gönder
+            if (insufficientDataCounter >= 3) {
+                insufficientDataCounter = 0;
+                emit spo2PulseData(lastValidSpo2Str, lastValidPulseStr);
+                qDebug() << "Yeterli veri yok ama son geçerli değerler gönderildi";
+            }
+        }
     }
 }
 

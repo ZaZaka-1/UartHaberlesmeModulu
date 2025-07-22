@@ -106,6 +106,8 @@ void MainWindow::handleSpo2PulseData(const QString &spo2, const QString &pulse)
     bool spo2DataChanged = false;
     bool pulseDataChanged = false;
 
+    qDebug() << "🔄 handleSpo2PulseData çağrıldı - SpO2:" << spo2 << "Pulse:" << pulse << "TestMode:" << m_isTestMode;
+
     if (spo2 != m_spo2) {
         m_spo2 = spo2;
         spo2DataChanged = true;
@@ -115,17 +117,27 @@ void MainWindow::handleSpo2PulseData(const QString &spo2, const QString &pulse)
         pulseDataChanged = true;
     }
 
-    // Test modunda değilse veritabanına kaydet
-    if (!m_isTestMode) {
+    // DÜZELTME: Test modu kontrolü ve veritabanı yazımı
+    if (m_isTestMode) {
+        qDebug() << "🧪 Test modu - Veritabanına yazılmıyor";
+    } else {
+        qDebug() << "📡 Canlı mod - Veritabanına yazılıyor...";
         insertMeasurement(spo2, pulse);
     }
 
-    // Sinyalleri gönder (UI güncellemesi için)
+    // Sinyalleri gönder
     if (spo2DataChanged) {
         emit spo2Changed();
+        qDebug() << "📊 SpO2 değeri değişti, sinyal gönderildi:" << spo2;
     }
+
     if (pulseDataChanged) {
         emit pulseChanged();
+        qDebug() << "💓 Pulse değeri değişti, sinyal gönderildi:" << pulse;
+    }
+
+    if (!spo2DataChanged && !pulseDataChanged) {
+        qDebug() << "⚪ SpO2/Pulse değerleri aynı kaldı";
     }
 }
 
@@ -163,24 +175,52 @@ void MainWindow::initDatabase()
     }
 }
 
+// OPSIYONEL: Veri yazma sıklığını kontrol etmek isterseniz
 void MainWindow::insertMeasurement(const QString &spo2, const QString &pulse)
 {
-    if (!db.isOpen())
+    if (!db.isOpen()) {
+        qDebug() << "❌ Veritabanı kapalı - veri yazılamadı";
         return;
+    }
+
+    // DÜZELTME 1: Test modu kontrolü ekle (güvenlik için)
+    if (m_isTestMode) {
+        qDebug() << "❌ Test modu aktif - veritabanına yazılmadı";
+        return;
+    }
+
+    // DÜZELTME 2: Spam kontrolünü daha esnek hale getir
+    static QDateTime lastWriteTime;
+    static QString lastSpo2, lastPulse;
+    QDateTime currentTime = QDateTime::currentDateTime();
+
+    // Eğer değerler değiştiyse veya 5 saniye geçtiyse yaz
+    bool dataChanged = (spo2 != lastSpo2 || pulse != lastPulse);
+    bool timeElapsed = !lastWriteTime.isValid() || lastWriteTime.secsTo(currentTime) >= 5;
+
+    if (!dataChanged && !timeElapsed) {
+        qDebug() << "⏸️ Veri değişmedi ve zaman henüz geçmedi - atlanıyor";
+        return;
+    }
+
+    // Son değerleri güncelle
+    lastWriteTime = currentTime;
+    lastSpo2 = spo2;
+    lastPulse = pulse;
 
     QSqlQuery query;
     query.prepare("INSERT INTO measurements (timestamp, spo2, pulse) "
                   "VALUES (:timestamp, :spo2, :pulse)");
 
-    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    QString timestamp = currentTime.toString("yyyy-MM-dd HH:mm:ss");
     query.bindValue(":timestamp", timestamp);
     query.bindValue(":spo2", spo2);
     query.bindValue(":pulse", pulse);
 
     if (!query.exec()) {
-        qWarning() << "Veri eklenemedi:" << query.lastError().text();
+        qWarning() << "❌ Veri eklenemedi:" << query.lastError().text();
     } else {
-        qDebug() << "Veri eklendi:" << timestamp << spo2 << pulse;
+        qDebug() << "✅ CANLİ VERİ veritabanına eklendi:" << timestamp << spo2 << pulse;
         emit measurementAdded();
     }
 }
@@ -407,34 +447,36 @@ void MainWindow::handleFrequencyChanged(int frequency)
 
 void MainWindow::startTestData(int intervalMs)
 {
-    qDebug() << "Test modu başlatılıyor, interval:" << intervalMs << "ms";
+    qDebug() << "🧪 TEST MODU BAŞLATILUYOR, interval:" << intervalMs << "ms";
 
+    // Test modu bayrağını ayarla
     m_isTestMode = true;
     emit testModeChanged();
 
     // Test değerlerini başlat
     m_testPhase = 0.0;
     m_waveformPhase = 0.0;
-    m_testSpo2 = 96 + QRandomGenerator::global()->bounded(5); // 96-100 arası
-    m_testPulse = 65 + QRandomGenerator::global()->bounded(20); // 65-85 arası
+    m_testSpo2 = 96 + QRandomGenerator::global()->bounded(5);
+    m_testPulse = 65 + QRandomGenerator::global()->bounded(20);
     m_testTimer->setInterval(intervalMs);
     m_testTimer->start();
 
-    qDebug() << "Test modu aktif - SpO2:" << m_testSpo2 << "Pulse:" << m_testPulse;
+    qDebug() << "✅ Test modu AKTIF - SpO2:" << m_testSpo2 << "Pulse:" << m_testPulse;
 }
 
 void MainWindow::stopTestData()
 {
-    qDebug() << "Test modu durduruluyor...";
+    qDebug() << "🛑 TEST MODU DURDURULUYOR...";
 
     if (m_testTimer->isActive()) {
         m_testTimer->stop();
     }
 
+    // Test modu bayrağını kaldır
     m_isTestMode = false;
     emit testModeChanged();
 
-    qDebug() << "Test modu durduruldu";
+    qDebug() << "✅ Test modu DURDURULDU - Artık canlı veriler veritabanına yazılacak";
 }
 
 void MainWindow::sendTestValue(int waveformValue)

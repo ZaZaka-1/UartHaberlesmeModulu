@@ -771,9 +771,13 @@ Item {
                         verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: {
+
                         autoUpdateTimer.stop()
                         updateTimer.stop()
                         page2.navigateBack()
+
+                        if (mainWindow) mainWindow.reconnect() // veya startDataStream()
+                                // Ana sayfaya dön
                     }
                 }
 
