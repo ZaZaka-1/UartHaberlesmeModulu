@@ -11,6 +11,7 @@ QML_IMPORT_MAJOR_VERSION = 1
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
+    mainwindow_pdf.cpp \
     serialcommunication.cpp
 
 HEADERS += \

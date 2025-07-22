@@ -28,6 +28,10 @@
 #include <QPointF>
 #include <QPen>
 #include <QBrush>
+#include <QColor>
+#include <QImage>
+#include <QBuffer>
+#include <QDesktopServices>
 
 // Forward declaration
 class SerialCommunication;
@@ -44,7 +48,14 @@ class MainWindow : public QObject
     Q_PROPERTY(bool isRecordingSession READ isRecordingSession NOTIFY recordingSessionChanged)
 
 public:
-    Q_INVOKABLE void exportToPdfFromBase64(const QString &base64Png);
+
+    Q_INVOKABLE void startTestData(int intervalMs = 100);
+    Q_INVOKABLE void stopTestData();
+    Q_INVOKABLE void sendTestValue(int waveformValue);
+    Q_PROPERTY(bool isTestMode READ isTestMode NOTIFY testModeChanged)
+    bool isTestMode() const { return m_isTestMode; }
+
+
     explicit MainWindow(QObject *parent = nullptr);
     ~MainWindow();
 
@@ -71,24 +82,34 @@ public:
     Q_INVOKABLE void reconnectSerial();
     Q_INVOKABLE void stopDataStream();
 
-    // PDF Export fonksiyonları
+    // PDF Export fonksiyonları - Regular Waveform
     Q_INVOKABLE QString exportWaveformToPdf(const QString &fileName = "");
-    Q_INVOKABLE QString getDefaultPdfPath();
     Q_INVOKABLE bool exportCurrentWaveformToPdf(const QString &filePath = "");
+    Q_INVOKABLE QString getDefaultPdfPath();
+
+    // PDF Export fonksiyonları - Session
+    Q_INVOKABLE QString exportSessionToPdf();
+
+    // PDF Export fonksiyonları - Base64
+    Q_INVOKABLE void exportToPdfFromBase64(const QString &base64Png);
+
+    // PDF Export fonksiyonları - Genel Report
+    void generatePdfReport(const QString &spo2, const QString &pulse,
+                           const QString &ageGroup, bool isNormalRange,
+                           const QString &recordTime, const QString &normalRange,
+                           const QString &imagePath = "");
+
+    // PDF dosyasını açma
     Q_INVOKABLE void openPdfFile(const QString &filePath);
 
     // Session yönetimi
     Q_INVOKABLE void startWaveformSession();
     Q_INVOKABLE void stopWaveformSession();
-    Q_INVOKABLE QString exportSessionToPdf();
-
-
-    void generatePdfReport(const QString &spo2, const QString &pulse,
-                           const QString &status, bool isNormalRange,
-                           const QString &date, const QString &time,
-                           const QString &patientName);
 
 signals:
+    void testModeChanged();
+
+
     void spo2Changed();
     void pulseChanged();
     void serialConnectedChanged();
@@ -109,6 +130,8 @@ signals:
     void waveformSessionCompleted();
 
 private slots:
+    void generateTestData();
+
     void handleWaveformData(uint8_t waveformValue);
     void handleSpo2PulseData(const QString &spo2, const QString &pulse);
     void handleErtData(uint8_t hr, uint8_t rr, float t1, float t2);
@@ -117,6 +140,15 @@ private slots:
     void onSessionTimeout();
 
 private:
+
+    // Test için eklenen members
+    QTimer *m_testTimer;
+    bool m_isTestMode = false;
+    double m_testPhase = 0.0;
+    int m_testSpo2 = 98;
+    int m_testPulse = 72;
+    double m_waveformPhase = 0.0;
+
     // Constants
     static const int MAX_WAVEFORM_POINTS = 200;
 
@@ -139,7 +171,7 @@ private:
     void insertMeasurement(const QString &spo2, const QString &pulse);
     void sendSpo2Settings(int frequency, int mode, int averaging);
 
-    // PDF Export functions
+    // PDF Export functions - Regular Waveform
     void drawWaveformChart(QPainter *painter, const QRect &chartRect);
     void drawChartBackground(QPainter *painter, const QRect &chartRect);
     void drawChartGrid(QPainter *painter, const QRect &chartRect);
@@ -147,7 +179,7 @@ private:
     void drawChartLabels(QPainter *painter, const QRect &chartRect);
     void drawPatientInfo(QPainter *painter, const QRect &infoRect);
 
-    // Session PDF functions
+    // PDF Export functions - Session
     void drawSessionInfo(QPainter *painter, const QRect &infoRect);
     void drawSessionWaveformChart(QPainter *painter, const QRect &chartRect);
     void drawSessionWaveformLine(QPainter *painter, const QRect &chartRect);

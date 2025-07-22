@@ -37,10 +37,10 @@ ApplicationWindow {
     function exportWaveformToPdf() {
         isExportingPdf = true
 
-        // Canvas'ı yeniden çiz
+        // Test modunda özel başlık ekle
+        waveformCanvas.isTestMode = true
         waveformCanvas.requestPaint()
 
-        // Kısa gecikme sonrası görüntüyü al
         exportTimer.start()
     }
     function generateCurrentWaveformImage() {
@@ -146,39 +146,25 @@ ApplicationWindow {
     Timer {
         id: exportTimer
         interval: 200
-        repeat: false
         onTriggered: {
-            // Canvas'tan görüntüyü al
             var imageData = waveformCanvas.toDataURL("image/png")
+            var base64Data = imageData.split(',')[1]
 
-            if (imageData && imageData.length > 0) {
-                console.log("Waveform görüntüsü oluşturuldu")
-
-                // Base64 verisini temizle (data:image/png;base64, kısmını çıkar)
-                var base64Data = imageData.split(',')[1]
-
-                // C++ tarafına gönder - hem waveform hem de hasta bilgilerini
-                if (mainWindow && mainWindow.exportToPdfWithWaveform) {
-                    var patientData = {
-                        spo2: root.spo2Value,
-                        pulse: root.pulseValue,
-                        ageGroup: root.currentAgeGroup,
-                        timestamp: new Date().toISOString(),
-                        normalRange: normalMinSpo2 + "-" + normalMaxSpo2 + "%",
-                        status: isInNormalRange ? "NORMAL" : "CRITICAL"
-                    }
-
-                    mainWindow.exportToPdfWithWaveform(base64Data, JSON.stringify(patientData))
-                } else if (mainWindow && mainWindow.exportToPdfFromBase64) {
-                    // Fallback - sadece görüntü
-                    mainWindow.exportToPdfFromBase64(base64Data)
-                } else {
-                    console.error("PDF export fonksiyonu bulunamadı!")
+            if (mainWindow && mainWindow.exportToPdfWithWaveform) {
+                var patientData = {
+                    spo2: root.spo2Value,
+                    pulse: root.pulseValue,
+                    ageGroup: root.currentAgeGroup,
+                    timestamp: new Date().toISOString(),
+                    normalRange: normalMinSpo2 + "-" + normalMaxSpo2 + "%",
+                    status: isInNormalRange ? "NORMAL" : "CRITICAL",
+                    isTestData: waveformCanvas.isTestMode // Test verisi olduğunu belirt
                 }
-            } else {
-                console.error("Waveform görüntüsü oluşturulamadı!")
+
+                mainWindow.exportToPdfWithWaveform(base64Data, JSON.stringify(patientData))
             }
 
+            waveformCanvas.isTestMode = false
             isExportingPdf = false
         }
     }
@@ -529,15 +515,23 @@ ApplicationWindow {
                             id: waveformCanvas
                             width: parent.width
                             height: parent.height - 38
-
                             property var waveformData: []
                             property int maxPoints: 500
                             property bool isReceivingData: false
                             property double lastDataTime: 0
+                            property bool isTestMode: false
+
+                            // DEBUG için sayacı ekleyelim
+                            property int dataCount: 0
 
                             function addWaveformData(value) {
+                                console.log("addWaveformData called with value:", value)
+                                dataCount++
+
                                 var normalizedValue = Math.max(0, Math.min(1, value / 255.0))
                                 waveformData.push(normalizedValue)
+
+                                console.log("Data added:", normalizedValue, "Total points:", waveformData.length)
 
                                 // Current session'a da ekle
                                 root.currentWaveformSession.push({
@@ -553,79 +547,100 @@ ApplicationWindow {
                                 isReceivingData = true
                                 lastDataTime = Date.now()
 
+                                console.log("Requesting repaint...")
                                 requestPaint()
                             }
 
                             onPaint: {
-                                var ctx = getContext("2d");
-                                if (!ctx) return
+                                console.log("onPaint called, data points:", waveformData.length)
 
-                                ctx.clearRect(0, 0, width, height);
-                                ctx.fillStyle = "#0d1117";
-                                ctx.fillRect(0, 0, width, height);
+                                var ctx = getContext("2d")
 
-                                ctx.strokeStyle = "#30363d";
-                                ctx.lineWidth = 0.5;
-                                ctx.setLineDash([2, 2]);
+                                // Canvas'ı temizle
+                                ctx.clearRect(0, 0, width, height)
 
-                                for (var i = 0; i <= 4; i++) {
-                                    var y = (height / 4) * i;
-                                    ctx.beginPath();
-                                    ctx.moveTo(0, y);
-                                    ctx.lineTo(width, y);
-                                    ctx.stroke();
+                                // Arka plan
+                                ctx.fillStyle = "#1a1a1a"
+                                ctx.fillRect(0, 0, width, height)
+
+                                // Test durumu yazısı
+                                if (isTestMode) {
+                                    ctx.fillStyle = "#f472b6"
+                                    ctx.font = "bold 12px Consolas, monospace"
+                                    ctx.textAlign = "right"
+                                    ctx.fillText("TEST MODE", width - 10, 20)
                                 }
 
-                                for (var j = 0; j <= 8; j++) {
-                                    var x = (width / 8) * j;
-                                    ctx.beginPath();
-                                    ctx.moveTo(x, 0);
-                                    ctx.lineTo(x, height);
-                                    ctx.stroke();
-                                }
+                                // Veri sayısını göster
+                                ctx.fillStyle = "#ffffff"
+                                ctx.font = "10px Arial"
+                                ctx.textAlign = "left"
+                                ctx.fillText("Data points: " + waveformData.length, 10, 20)
+                                ctx.fillText("Data count: " + dataCount, 10, 35)
 
-                                ctx.setLineDash([]);
-
+                                // Waveform çiz
                                 if (waveformData.length > 1) {
-                                    ctx.strokeStyle = "#58a6ff";
-                                    ctx.lineWidth = 2;
-                                    ctx.beginPath();
+                                    console.log("Drawing waveform with", waveformData.length, "points")
 
-                                    const stepX = width / (maxPoints - 1);
-                                    const startX = width - (waveformData.length * stepX);
+                                    ctx.strokeStyle = "#00ff00"
+                                    ctx.lineWidth = 2
+                                    ctx.beginPath()
 
-                                    for (let k = 0; k < waveformData.length; k++) {
-                                        const x = startX + (k * stepX);
-                                        const y = height - (waveformData[k] * height * 0.8) - (height * 0.1);
-                                        if (k === 0) {
-                                            ctx.moveTo(x, y);
+                                    var stepX = width / (maxPoints - 1)
+                                    var startIndex = Math.max(0, waveformData.length - maxPoints)
+
+                                    for (var i = 0; i < waveformData.length; i++) {
+                                        var x = i * stepX
+                                        var y = height - (waveformData[startIndex + i] * height)
+
+                                        if (i === 0) {
+                                            ctx.moveTo(x, y)
                                         } else {
-                                            ctx.lineTo(x, y);
+                                            ctx.lineTo(x, y)
                                         }
                                     }
-                                    ctx.stroke();
+
+                                    ctx.stroke()
+                                } else {
+                                    console.log("Not enough data to draw, points:", waveformData.length)
                                 }
 
-                                if (waveformData.length === 0 || !isReceivingData) {
-                                        ctx.fillStyle = "#7d8590";
-                                        ctx.font = "12px Consolas, monospace";
-                                        ctx.textAlign = "center";
-                                        ctx.fillText("Waiting for waveform data...", width/2, height/2);
-                                    }
+                                // Veri alma durumu
+                                if (!isReceivingData) {
+                                    ctx.fillStyle = "#ff4444"
+                                    ctx.font = "12px Arial"
+                                    ctx.textAlign = "center"
+                                    ctx.fillText("NO DATA", width / 2, height / 2)
+                                }
+                            }
 
-                                if (isExportingPdf) {
-                                        // Başlık
-                                        ctx.fillStyle = "#58a6ff";
-                                        ctx.font = "bold 16px Consolas, monospace";
-                                        ctx.textAlign = "left";
-                                        ctx.fillText("SpO₂ Plethysmograph - " + new Date().toLocaleString(), 10, 25);
+                            Connections {
+                                target: mainWindow
 
-                                        // Hasta bilgileri
-                                        ctx.font = "12px Consolas, monospace";
-                                        ctx.fillText("SpO₂: " + root.spo2Value + "% | Pulse: " + root.pulseValue + " BPM", 10, 45);
-                                        ctx.fillText("Age Group: " + root.currentAgeGroup + " | Status: " + (isInNormalRange ? "NORMAL" : "CRITICAL"), 10, 60);
-                                        ctx.fillText("Normal Range: " + normalMinSpo2 + "-" + normalMaxSpo2 + "%", 10, 75);
+                                function onRealTimeWaveformPoint(value) {
+                                    console.log("=== onRealTimeWaveformPoint triggered ===")
+                                    console.log("Received value:", value)
+                                    console.log("Test mode active:", mainWindow.isTestMode)
+
+                                    if (mainWindow.isTestMode) {
+                                        isTestMode = true
                                     }
+                                    addWaveformData(value)
+                                }
+
+                                function onTestModeChanged() {
+                                    console.log("=== onTestModeChanged triggered ===")
+                                    console.log("New test mode:", mainWindow.isTestMode)
+                                    waveformCanvas.isTestMode = mainWindow.isTestMode
+                                    requestPaint()
+                                }
+
+                                // Bu bağlantıyı da test edelim
+                                function onWaveformSampleChanged() {
+                                    console.log("=== onWaveformSampleChanged triggered ===")
+                                    console.log("Waveform sample:", mainWindow.waveformSample)
+                                    addWaveformData(mainWindow.waveformSample)
+                                }
                             }
 
                             Timer {
@@ -639,6 +654,12 @@ ApplicationWindow {
                                         waveformCanvas.requestPaint()
                                     }
                                 }
+                            }
+
+                            // Component.onCompleted ile başlangıç kontrolü
+                            Component.onCompleted: {
+                                console.log("Waveform Canvas initialized")
+                                console.log("MainWindow isTestMode:", mainWindow.isTestMode)
                             }
                         }
                     }
@@ -811,6 +832,79 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                         }
                         onClicked: exportWaveformToPdf()
+                    }
+                    Button {
+                        width: 120
+                        height: 35
+                        background: Rectangle {
+                            color: parent.pressed ? "#9d174d" : (mainWindow.isTestMode ? "#065f46" : "#21262d")
+                            radius: 6
+                            border.color: mainWindow.isTestMode ? "#10b981" : "#f472b6"
+                            border.width: 1
+                        }
+                        contentItem: Text {
+                            text: mainWindow.isTestMode ? "Test Aktif" : "Test Verisi"
+                            font.family: "Consolas, monospace"
+                            font.pointSize: 10
+                            color: mainWindow.isTestMode ? "#10b981" : "#f472b6"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: testMenu.open()
+
+                        Menu {
+                            id: testMenu
+                            y: parent.height + 5
+                            width: 250
+
+                            MenuItem {
+                                text: mainWindow.isTestMode ? "Test Modunu Durdur" : "Otomatik Test Başlat (100ms)"
+                                onTriggered: {
+                                    if (mainWindow.isTestMode) {
+                                        mainWindow.stopTestData()
+                                    } else {
+                                        mainWindow.startTestData(100)
+                                    }
+                                }
+                            }
+
+                            MenuSeparator {}
+
+                            MenuItem {
+                                text: "Hızlı Test (50ms)"
+                                enabled: !mainWindow.isTestMode
+                                onTriggered: mainWindow.startTestData(50)
+                            }
+
+                            MenuItem {
+                                text: "Normal Test (100ms)"
+                                enabled: !mainWindow.isTestMode
+                                onTriggered: mainWindow.startTestData(100)
+                            }
+
+                            MenuItem {
+                                text: "Yavaş Test (200ms)"
+                                enabled: !mainWindow.isTestMode
+                                onTriggered: mainWindow.startTestData(200)
+                            }
+
+                            MenuSeparator {}
+
+                            MenuItem {
+                                text: "Rastgele Waveform Gönder"
+                                onTriggered: mainWindow.sendTestValue(Math.floor(Math.random() * 255))
+                            }
+
+                            MenuItem {
+                                text: "Yüksek Değer (200)"
+                                onTriggered: mainWindow.sendTestValue(200)
+                            }
+
+                            MenuItem {
+                                text: "Düşük Değer (50)"
+                                onTriggered: mainWindow.sendTestValue(50)
+                            }
+                        }
                     }
                 }
             }
