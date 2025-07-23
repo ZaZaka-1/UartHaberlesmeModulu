@@ -415,6 +415,35 @@ void MainWindow::clearDatabase()
     }
 }
 
+QString MainWindow::generateWaveformImage(const QVariantList &waveformData)
+{
+    if (waveformData.isEmpty()) {
+        return "";
+    }
+
+    // Basit bir QImage oluştur (gerçekte daha karmaşık bir waveform çizimi yapılmalı)
+    QImage image(400, 100, QImage::Format_ARGB32);
+    image.fill(Qt::transparent);
+
+    QPainter painter(&image);
+    painter.setPen(QPen(Qt::red, 2));
+
+    // Waveform çiz
+    for (int i = 1; i < waveformData.size(); i++) {
+        double y1 = 50 - (waveformData[i-1].toMap()["value"].toDouble() * 40);
+        double y2 = 50 - (waveformData[i].toMap()["value"].toDouble() * 40);
+        painter.drawLine(QPointF((i-1)*2, y1), QPointF(i*2, y2));
+    }
+
+    // Base64'e dönüştür
+    QByteArray byteArray;
+    QBuffer buffer(&byteArray);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, "PNG");
+
+    return QString("data:image/png;base64," + byteArray.toBase64());
+}
+
 void MainWindow::onWaveformSampleReceived()
 {
     m_waveformSample = serialComm->waveformSample();

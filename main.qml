@@ -808,7 +808,6 @@ ApplicationWindow {
 
                             root.isActive = false
                             root.showMain2 = true
-                            generateCurrentWaveformImage();
                         }
                     }
 

@@ -49,6 +49,7 @@ class MainWindow : public QObject
 
 public:
 
+    QString generateWaveformImage(const QVariantList &waveformData);
     Q_INVOKABLE void startTestData(int intervalMs = 100);
     Q_INVOKABLE void stopTestData();
     Q_INVOKABLE void sendTestValue(int waveformValue);
