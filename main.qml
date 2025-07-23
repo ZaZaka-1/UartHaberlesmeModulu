@@ -9,7 +9,6 @@ ApplicationWindow {
     title: "SPO2 Monitor"
     color: "#0a0e14"
 
-
     property bool isExportingPdf: false
     property string lastExportedImagePath: ""
     property bool isActive: true
@@ -44,16 +43,20 @@ ApplicationWindow {
         exportTimer.start()
     }
     function generateCurrentWaveformImage() {
-        // Canvas'tan güncel görüntüyü al
+        console.log("Generating waveform image...")
+        waveformCanvas.isExportingImage = true
         waveformCanvas.requestPaint()
+    }
 
-        // Kısa gecikme sonrası görüntüyü oluştur
-        Qt.callLater(function() {
+    Timer {
+        id: imageExportTimer
+        interval: 100
+        onTriggered: {
             var imageData = waveformCanvas.toDataURL("image/png")
             if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
                 pageLoader.item.setCurrentWaveformImage(imageData)
             }
-        })
+        }
     }
 
     function updateNormalRanges() {
@@ -90,25 +93,27 @@ ApplicationWindow {
 
     function saveWaveformSession() {
         if (currentWaveformSession.length > 0) {
+            // 📸 Waveform imajını canvas'tan al (Base64)
+            var imageBase64 = waveformCanvas.toDataURL("image/png").split(',')[1]
+
             var sessionData = {
                 timestamp: new Date().toISOString(),
                 duration: sessionDuration,
                 spo2: spo2Value,
                 pulse: pulseValue,
                 ageGroup: currentAgeGroup,
-                waveformData: currentWaveformSession.slice(), // Kopya oluştur
-                isNormalRange: isInNormalRange
+                waveformData: currentWaveformSession.slice(),
+                isNormalRange: isInNormalRange,
+                imageData: imageBase64 //
             }
 
             waveformDatabase.push(sessionData)
             console.log("Waveform session kaydedildi:", sessionData.timestamp)
 
-            // Database boyutunu kontrol et
             if (waveformDatabase.length > maxDatabaseSize) {
-                waveformDatabase.shift() // En eski kaydı sil
+                waveformDatabase.shift()
             }
 
-            // Yeni session'ı başlat
             currentWaveformSession = []
         }
     }
@@ -141,6 +146,19 @@ ApplicationWindow {
         function onWaveformSampleReceived() { waveformCanvas.addWaveformData(mainWindow.waveformSample) }
         function onSpo2PulseData(spo2, pulse) { root.spo2Value = spo2; root.pulseValue = pulse }
         onRealTimeWaveformPoint: { waveformCanvas.addWaveformData(amplitude) }
+    }
+    Connections {
+        target: waveformCanvas
+        function onImageExported() {
+            var imageData = waveformCanvas.toDataURL("image/png");
+            console.log("Image data length:", imageData.length);
+            if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
+                pageLoader.item.setCurrentWaveformImage(imageData);
+            }
+            // Ana sayfaya geçişi burada yap
+            root.isActive = false;
+            root.showMain2 = true;
+        }
     }
 
     Timer {
@@ -520,6 +538,9 @@ ApplicationWindow {
                             property bool isReceivingData: false
                             property double lastDataTime: 0
                             property bool isTestMode: false
+                            property bool isExportingImage: false  // Yeni property ekleyin
+                                signal imageExported()  // Yeni signal ekleyin
+
 
                             // DEBUG için sayacı ekleyelim
                             property int dataCount: 0
@@ -606,12 +627,11 @@ ApplicationWindow {
                                 }
 
                                 // Veri alma durumu
-                                if (!isReceivingData) {
-                                    ctx.fillStyle = "#ff4444"
-                                    ctx.font = "12px Arial"
-                                    ctx.textAlign = "center"
-                                    ctx.fillText("NO DATA", width / 2, height / 2)
-                                }
+                                if (isExportingImage) {
+                                        isExportingImage = false;
+                                        console.log("Emitting imageExported signal");
+                                        imageExported();  // Bu satırın olduğundan emin olun
+                                    }
                             }
 
                             Connections {
@@ -788,6 +808,7 @@ ApplicationWindow {
 
                             root.isActive = false
                             root.showMain2 = true
+                            generateCurrentWaveformImage();
                         }
                     }
 
