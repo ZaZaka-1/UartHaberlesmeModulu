@@ -87,10 +87,14 @@ QString MainWindow::exportSessionToPdf()
 
 void MainWindow::drawSessionInfo(QPainter *painter, const QRect &infoRect)
 {
-    painter->setFont(QFont("Arial", 12, QFont::Normal));
-    painter->setPen(QPen(Qt::black, 1));
+    // Debug için PDF'e yazıldığını kontrol et
+    qDebug() << "PDF'e session bilgileri yazılıyor...";
 
     QString currentDateTime = QDateTime::currentDateTime().toString("dd.MM.yyyy HH:mm:ss");
+    QString dataSource = getDataSourceText();
+    QString status = getStatusText(m_spo2, m_pulse);
+
+    qDebug() << "Session - SpO2:" << m_spo2 << "Pulse:" << m_pulse << "Status:" << status << "DataSource:" << dataSource;
 
     // Session süresini hesapla
     double sessionDuration = 10.0; // 10 saniye
@@ -101,19 +105,52 @@ void MainWindow::drawSessionInfo(QPainter *painter, const QRect &infoRect)
     }
 
     QStringList sessionInfo;
-    sessionInfo << QString("Session Rapor Tarihi: %1").arg(currentDateTime);
+    sessionInfo << QString("Tarih / Saat: %1").arg(currentDateTime);
     sessionInfo << QString("Session Süresi: %1 saniye").arg(QString::number(sessionDuration, 'f', 1));
-    sessionInfo << QString("Session SpO2: %1%").arg(m_spo2);
-    sessionInfo << QString("Session Nabız: %1 bpm").arg(m_pulse);
+    sessionInfo << QString("SpO2 Değeri: %1%").arg(m_spo2);
+    sessionInfo << QString("Nabız: %1 bpm").arg(m_pulse);
+    sessionInfo << QString("Durum: %1").arg(status);
+    sessionInfo << QString("Veri Kaynağı: %1").arg(dataSource);
     sessionInfo << QString("Frekans: %1 Hz").arg(m_currentFrequency);
     sessionInfo << QString("Toplam Veri Noktası: %1").arg(m_currentWaveformSession.size());
 
-    int lineHeight = 25;
-    int y = infoRect.y();
+    // Font büyüklüğü ve satır yüksekliğini ayarla
+    int fontSize = 14;  // Daha büyük font
+    int lineHeight = 40; // Daha fazla boşluk
+    int startY = infoRect.y() + 20; // Başlangıç pozisyonu
 
-    for (const QString &info : sessionInfo) {
-        painter->drawText(infoRect.x(), y, info);
-        y += lineHeight;
+    // Her satırı ayrı ayrı çiz
+    for (int i = 0; i < sessionInfo.size(); ++i) {
+        int currentY = startY + (i * lineHeight);
+
+        // Font ve renk ayarlarını her satır için yap
+        if (i == 4) { // Durum satırı (5. satır, index 4)
+            if (status == "KRİTİK") {
+                painter->setPen(QPen(QColor(255, 0, 0), 2)); // Kırmızı, kalın
+                painter->setFont(QFont("Arial", fontSize, QFont::Bold));
+            } else {
+                painter->setPen(QPen(QColor(0, 128, 0), 2)); // Yeşil, kalın
+                painter->setFont(QFont("Arial", fontSize, QFont::Bold));
+            }
+        } else if (i == 5) { // Veri Kaynağı satırı (6. satır, index 5)
+            if (dataSource == "TEST VERİSİ") {
+                painter->setPen(QPen(QColor(0, 0, 255), 2)); // Mavi, kalın
+                painter->setFont(QFont("Arial", fontSize, QFont::Bold));
+            } else {
+                painter->setPen(QPen(QColor(0, 0, 139), 2)); // Koyu mavi, kalın
+                painter->setFont(QFont("Arial", fontSize, QFont::Bold));
+            }
+        } else {
+            painter->setPen(QPen(QColor(0, 0, 0), 1)); // Siyah, normal
+            painter->setFont(QFont("Arial", fontSize, QFont::Normal));
+        }
+
+        // Metni çiz
+        QRect textRect(infoRect.x() + 10, currentY - 15, infoRect.width() - 20, 30);
+        painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, sessionInfo[i]);
+
+        // Debug çıktısı
+        qDebug() << "PDF session satır" << i+1 << "yazıldı:" << sessionInfo[i];
     }
 }
 
@@ -278,24 +315,61 @@ QString MainWindow::getDefaultPdfPath()
 
 void MainWindow::drawPatientInfo(QPainter *painter, const QRect &infoRect)
 {
-    painter->setFont(QFont("Arial", 12, QFont::Normal));
-    painter->setPen(QPen(Qt::black, 1));
+    // Debug için PDF'e yazıldığını kontrol et
+    qDebug() << "PDF'e hasta bilgileri yazılıyor...";
 
     QString currentDateTime = QDateTime::currentDateTime().toString("dd.MM.yyyy HH:mm:ss");
+    QString dataSource = getDataSourceText();
+    QString status = getStatusText(m_spo2, m_pulse);
+
+    qDebug() << "SpO2:" << m_spo2 << "Pulse:" << m_pulse << "Status:" << status << "DataSource:" << dataSource;
 
     QStringList patientInfo;
-    patientInfo << QString("Rapor Tarihi: %1").arg(currentDateTime);
-    patientInfo << QString("Mevcut SpO2: %1%").arg(m_spo2);
-    patientInfo << QString("Mevcut Nabız: %1 bpm").arg(m_pulse);
+    patientInfo << QString("Tarih / Saat: %1").arg(currentDateTime);
+    patientInfo << QString("SpO2 Değeri: %1%").arg(m_spo2);
+    patientInfo << QString("Nabız: %1 bpm").arg(m_pulse);
+    patientInfo << QString("Durum: %1").arg(status);
+    patientInfo << QString("Veri Kaynağı: %1").arg(dataSource);
     patientInfo << QString("Frekans: %1 Hz").arg(m_currentFrequency);
     patientInfo << QString("Toplam Veri Noktası: %1").arg(m_waveformData.size());
 
-    int lineHeight = 25;
-    int y = infoRect.y();
+    // Font büyüklüğü ve satır yüksekliğini ayarla
+    int fontSize = 14;  // Daha büyük font
+    int lineHeight = 40; // Daha fazla boşluk
+    int startY = infoRect.y() + 20; // Başlangıç pozisyonu
 
-    for (const QString &info : patientInfo) {
-        painter->drawText(infoRect.x(), y, info);
-        y += lineHeight;
+    // Her satırı ayrı ayrı çiz
+    for (int i = 0; i < patientInfo.size(); ++i) {
+        int currentY = startY + (i * lineHeight);
+
+        // Font ve renk ayarlarını her satır için yap
+        if (i == 3) { // Durum satırı (4. satır, index 3)
+            if (status == "KRİTİK") {
+                painter->setPen(QPen(QColor(255, 0, 0), 2)); // Kırmızı, kalın
+                painter->setFont(QFont("Arial", fontSize, QFont::Bold));
+            } else {
+                painter->setPen(QPen(QColor(0, 128, 0), 2)); // Yeşil, kalın
+                painter->setFont(QFont("Arial", fontSize, QFont::Bold));
+            }
+        } else if (i == 4) { // Veri Kaynağı satırı (5. satır, index 4)
+            if (dataSource == "TEST VERİSİ") {
+                painter->setPen(QPen(QColor(0, 0, 255), 2)); // Mavi, kalın
+                painter->setFont(QFont("Arial", fontSize, QFont::Bold));
+            } else {
+                painter->setPen(QPen(QColor(0, 0, 139), 2)); // Koyu mavi, kalın
+                painter->setFont(QFont("Arial", fontSize, QFont::Bold));
+            }
+        } else {
+            painter->setPen(QPen(QColor(0, 0, 0), 1)); // Siyah, normal
+            painter->setFont(QFont("Arial", fontSize, QFont::Normal));
+        }
+
+        // Metni çiz
+        QRect textRect(infoRect.x() + 10, currentY - 15, infoRect.width() - 20, 30);
+        painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, patientInfo[i]);
+
+        // Debug çıktısı
+        qDebug() << "PDF satır" << i+1 << "yazıldı:" << patientInfo[i];
     }
 }
 
@@ -342,40 +416,22 @@ void MainWindow::drawChartGrid(QPainter *painter, const QRect &chartRect)
     }
 }
 
-void MainWindow::drawWaveformLine(QPainter *painter, const QRect &chartRect)
-{
+void MainWindow::drawWaveformLine(QPainter *painter, const QRect &chartRect) {
     if (m_waveformData.isEmpty()) {
-        // Veri yoksa uyarı mesajı
-        painter->setFont(QFont("Arial", 14));
-        painter->setPen(QPen(Qt::red, 2));
-        painter->drawText(chartRect, Qt::AlignCenter, "Waveform verisi bulunamadı");
+        painter->drawText(chartRect, Qt::AlignCenter, "Veri yok!");
         return;
     }
 
-    painter->setPen(QPen(Qt::blue, 2));
+    painter->setPen(QPen(Qt::blue, 2)); // Çizgi rengi ve kalınlığı
+    QPolygonF points;
 
-    // Waveform verilerini çiz
-    QPolygonF waveformPoints;
-
-    int dataSize = m_waveformData.size();
-    for (int i = 0; i < dataSize; ++i) {
-        QVariantMap dataPoint = m_waveformData[i].toMap();
-        int amplitude = dataPoint["amplitude"].toInt();
-
-        // X pozisyonu (zaman)
-        double x = chartRect.x() + (static_cast<double>(i) / (dataSize - 1)) * chartRect.width();
-
-        // Y pozisyonu (amplitude) - normalize et (0-255 -> chart height)
-        double normalizedAmplitude = static_cast<double>(amplitude) / 255.0;
-        double y = chartRect.bottom() - (normalizedAmplitude * chartRect.height());
-
-        waveformPoints << QPointF(x, y);
+    for (int i = 0; i < m_waveformData.size(); ++i) {
+        double x = chartRect.left() + (i * chartRect.width() / m_waveformData.size());
+        double y = chartRect.bottom() - (m_waveformData[i].toMap()["amplitude"].toInt() * chartRect.height() / 255.0);
+        points << QPointF(x, y);
     }
 
-    // Çizgiyi çiz
-    if (waveformPoints.size() > 1) {
-        painter->drawPolyline(waveformPoints);
-    }
+    painter->drawPolyline(points); // Çizgiyi çiz
 }
 
 void MainWindow::drawChartLabels(QPainter *painter, const QRect &chartRect)
@@ -439,21 +495,49 @@ void MainWindow::generatePdfReport(const QString &spo2, const QString &pulse,
         painter.setFont(QFont("Arial", 24, QFont::Bold));
         painter.drawText(titleRect, Qt::AlignCenter, "SpO2 Monitor Raporu");
 
-        // Hasta bilgilerini çiz
+        // Geliştirilmiş hasta bilgileri
+        QString dataSource = getDataSourceText();
+        QString status = getStatusText(spo2, pulse);
+
         painter.setFont(QFont("Arial", 12));
-        painter.drawText(patientInfoRect, Qt::AlignLeft,
-                         QString("Rapor Tarihi: %1\n"
-                                 "SpO2: %2%\n"
-                                 "Nabız: %3 bpm\n"
-                                 "Yaş Grubu: %4\n"
-                                 "Normal Aralık: %5\n"
-                                 "Durum: %6")
-                             .arg(recordTime)
-                             .arg(spo2)
-                             .arg(pulse)
-                             .arg(ageGroup)
-                             .arg(normalRange)
-                             .arg(isNormalRange ? "Normal" : "Anormal"));
+
+        QStringList reportInfo;
+        reportInfo << QString("Tarih / Saat: %1").arg(recordTime);
+        reportInfo << QString("SpO2 Değeri: %1%").arg(spo2);
+        reportInfo << QString("Nabız: %1 bpm").arg(pulse);
+        reportInfo << QString("Durum: %1").arg(status);
+        reportInfo << QString("Veri Kaynağı: %1").arg(dataSource);
+        reportInfo << QString("Yaş Grubu: %1").arg(ageGroup);
+        reportInfo << QString("Normal Aralık: %1").arg(normalRange);
+
+        int lineHeight = 25;
+        int y = patientInfoRect.y();
+
+        for (int i = 0; i < reportInfo.size(); ++i) {
+            if (i == 3) { // Durum satırı
+                if (status == "KRİTİK") {
+                    painter.setPen(QPen(Qt::red, 1));
+                    painter.setFont(QFont("Arial", 12, QFont::Bold));
+                } else {
+                    painter.setPen(QPen(Qt::darkGreen, 1));
+                    painter.setFont(QFont("Arial", 12, QFont::Bold));
+                }
+            } else if (i == 4) { // Veri Kaynağı satırı
+                if (dataSource == "TEST VERİSİ") {
+                    painter.setPen(QPen(Qt::blue, 1));
+                    painter.setFont(QFont("Arial", 12, QFont::Bold));
+                } else {
+                    painter.setPen(QPen(Qt::darkBlue, 1));
+                    painter.setFont(QFont("Arial", 12, QFont::Bold));
+                }
+            } else {
+                painter.setPen(QPen(Qt::black, 1));
+                painter.setFont(QFont("Arial", 12, QFont::Normal));
+            }
+
+            painter.drawText(patientInfoRect.x(), y, reportInfo[i]);
+            y += lineHeight;
+        }
 
         // Eğer görsel dosyası varsa ekle
         if (!imagePath.isEmpty() && QFile::exists(imagePath)) {
@@ -482,9 +566,12 @@ void MainWindow::exportToPdfFromBase64(const QString &base64Png)
         return;
     }
 
-    QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QString baseDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QString waveformDir = baseDir + "/WaveformPDF";
+    QDir().mkpath(waveformDir); // Klasör yoksa oluşturulur
+
     QString fileName = "waveform_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") + ".pdf";
-    QString filePath = defaultDir + "/" + fileName;
+    QString filePath = waveformDir + "/" + fileName;
 
     QPdfWriter writer(filePath);
     writer.setPageSize(QPageSize::A4);
@@ -516,4 +603,40 @@ void MainWindow::exportToPdfFromBase64(const QString &base64Png)
 void MainWindow::openPdfFile(const QString &filePath)
 {
     QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
+}
+
+void MainWindow::exportToPdfWithWaveform(const QString &base64Data, const QString &patientJson)
+{
+    Q_UNUSED(patientJson); // Eğer JSON kullanılmayacaksa geçici olarak sustur
+
+    exportToPdfFromBase64(base64Data);
+}
+
+QString MainWindow::getDataSourceText() const
+{
+    return m_isTestMode ? "TEST VERİSİ" : "CANLI VERİ";
+}
+
+QString MainWindow::getStatusText(const QString &spo2, const QString &pulse) const
+{
+    bool spo2Ok = false;
+    bool pulseOk = false;
+
+    // SpO2 kontrolü (95-100 arası normal)
+    int spo2Value = spo2.toInt(&spo2Ok);
+    if (spo2Ok && spo2Value >= 95 && spo2Value <= 100) {
+        spo2Ok = true;
+    } else {
+        spo2Ok = false;
+    }
+
+    // Nabız kontrolü (60-100 arası normal)
+    int pulseValue = pulse.toInt(&pulseOk);
+    if (pulseOk && pulseValue >= 60 && pulseValue <= 100) {
+        pulseOk = true;
+    } else {
+        pulseOk = false;
+    }
+
+    return (spo2Ok && pulseOk) ? "NORMAL" : "KRİTİK";
 }

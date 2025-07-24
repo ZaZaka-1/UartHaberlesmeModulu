@@ -43,15 +43,17 @@ ApplicationWindow {
         exportTimer.start()
     }
     function generateCurrentWaveformImage() {
-        console.log("Generating waveform image...")
-        waveformCanvas.isExportingImage = true
-        waveformCanvas.requestPaint()
+        console.log("Generating waveform image...");
+        waveformCanvas.isExportingImage = true;
+        waveformCanvas.requestPaint();
     }
+
 
     Timer {
         id: imageExportTimer
-        interval: 100
-        onTriggered: {
+        interval: 500
+        onTriggered: {S
+            console.log("🟢 imageExportTimer triggered")
             var imageData = waveformCanvas.toDataURL("image/png")
             if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
                 pageLoader.item.setCurrentWaveformImage(imageData)
@@ -150,15 +152,15 @@ ApplicationWindow {
     Connections {
         target: waveformCanvas
         function onImageExported() {
-            var imageData = waveformCanvas.toDataURL("image/png");
-            console.log("Image data length:", imageData.length);
-            if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
-                pageLoader.item.setCurrentWaveformImage(imageData);
+                var imageData = waveformCanvas.toDataURL("image/png");
+                console.log("Image data length:", imageData.length);
+                if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
+                    pageLoader.item.setCurrentWaveformImage(imageData);
+                }
+                // Ana sayfaya geçişi burada yap
+                root.isActive = false;
+                root.showMain2 = true;
             }
-            // Ana sayfaya geçişi burada yap
-            root.isActive = false;
-            root.showMain2 = true;
-        }
     }
 
     Timer {
@@ -184,6 +186,18 @@ ApplicationWindow {
 
             waveformCanvas.isTestMode = false
             isExportingPdf = false
+        }
+    }
+
+    Timer {
+        id: autoWaveformImageTimer
+        interval: 5000 // Her 5 saniyede bir çalışır
+        repeat: true
+        running: root.isActive && root.showMain2 // sadece main2 açıkken çalışsın
+
+        onTriggered: {
+            console.log("🔄 Otomatik waveform image oluşturuluyor...")
+            generateCurrentWaveformImage()
         }
     }
 
@@ -628,9 +642,9 @@ ApplicationWindow {
 
                                 // Veri alma durumu
                                 if (isExportingImage) {
-                                        isExportingImage = false;
+                                    isExportingImage = false;
                                         console.log("Emitting imageExported signal");
-                                        imageExported();  // Bu satırın olduğundan emin olun
+                                        imageExported(); // Bu sinyali tetikleyin
                                     }
                             }
 
@@ -802,9 +816,8 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                         }
                         onClicked: {
-
-                            // Önce waveform görüntüsünü oluştur
-                            generateCurrentWaveformImage()
+                            // Otomatik olarak belirli aralıklarla waveform görüntüsü oluşturulsun
+                            imageExportTimer.running = true
 
                             root.isActive = false
                             root.showMain2 = true

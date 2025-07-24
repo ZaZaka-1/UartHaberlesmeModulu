@@ -93,6 +93,7 @@ public:
 
     // PDF Export fonksiyonları - Base64
     Q_INVOKABLE void exportToPdfFromBase64(const QString &base64Png);
+    Q_INVOKABLE void exportToPdfWithWaveform(const QString &base64Data, const QString &patientJson);
 
     // PDF Export fonksiyonları - Genel Report
     void generatePdfReport(const QString &spo2, const QString &pulse,
@@ -179,6 +180,9 @@ private:
     void drawWaveformLine(QPainter *painter, const QRect &chartRect);
     void drawChartLabels(QPainter *painter, const QRect &chartRect);
     void drawPatientInfo(QPainter *painter, const QRect &infoRect);
+
+    QString getDataSourceText() const;
+    QString getStatusText(const QString &spo2, const QString &pulse) const;
 
     // PDF Export functions - Session
     void drawSessionInfo(QPainter *painter, const QRect &infoRect);

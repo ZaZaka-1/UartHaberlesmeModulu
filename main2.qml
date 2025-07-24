@@ -5,6 +5,7 @@ Item {
     id: main2Root
     anchors.fill: parent
 
+    signal setWaveformDatabase(var db)
     signal navigateBack()
 
     property int selectedIndex: -1
@@ -53,6 +54,20 @@ Item {
         } catch (e) {
             console.log("❌ Veritabanı yükleme hatası:", e)
         }
+    }
+
+    function setCurrentWaveformImage(imageData) {
+        currentWaveformImage = imageData
+
+        var newWaveform = {
+            id: Date.now(),
+            timestamp: new Date().getTime(),
+            imageData: currentWaveformImage,
+            spo2: currentSpo2.toFixed(1),
+            pulse: currentPulse.toFixed(0)
+        }
+        waveformImages.push(newWaveform)
+        console.log("📊 Waveform kaydedildi, toplam:", waveformImages.length)
     }
 
     Timer {
