@@ -49,6 +49,9 @@ class MainWindow : public QObject
 
 public:
 
+    Q_INVOKABLE QVariantList getWaveformImages();
+    Q_INVOKABLE void insertWaveformImage(const QString &spo2, const QString &pulse, const QString &imageData);
+
     QString generateWaveformImage(const QVariantList &waveformData);
     Q_INVOKABLE void startTestData(int intervalMs = 100);
     Q_INVOKABLE void stopTestData();

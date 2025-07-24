@@ -201,6 +201,19 @@ ApplicationWindow {
         }
     }
 
+    Timer {
+        id: autoSaveWaveformTimer
+        interval: 5000
+        repeat: true
+        running: root.isActive
+
+        onTriggered: {
+            var imageBase64 = waveformCanvas.toDataURL("image/png").split(',')[1]
+            if (mainWindow && mainWindow.insertWaveformImage)
+                mainWindow.insertWaveformImage(spo2Value, pulseValue, imageBase64)
+        }
+    }
+
     Rectangle {
         id: alertPopup
         width: parent.width - 40

@@ -161,6 +161,16 @@ void MainWindow::initDatabase()
     }
 
     QSqlQuery query;
+
+    QString createWaveformImageTable =
+        "CREATE TABLE IF NOT EXISTS waveform_images ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "timestamp TEXT, "
+        "spo2 TEXT, "
+        "pulse TEXT, "
+        "imageData TEXT)";
+    query.exec(createWaveformImageTable);
+
     QString createTable =
         "CREATE TABLE IF NOT EXISTS measurements ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -223,6 +233,43 @@ void MainWindow::insertMeasurement(const QString &spo2, const QString &pulse)
         qDebug() << "✅ CANLİ VERİ veritabanına eklendi:" << timestamp << spo2 << pulse;
         emit measurementAdded();
     }
+}
+
+void MainWindow::insertWaveformImage(const QString &spo2, const QString &pulse, const QString &imageData)
+{
+    if (!db.isOpen()) return;
+
+    QSqlQuery query;
+    query.prepare("INSERT INTO waveform_images (timestamp, spo2, pulse, imageData) "
+                  "VALUES (:timestamp, :spo2, :pulse, :imageData)");
+
+    query.bindValue(":timestamp", QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
+    query.bindValue(":spo2", spo2);
+    query.bindValue(":pulse", pulse);
+    query.bindValue(":imageData", imageData);
+
+    if (!query.exec())
+        qWarning() << "❌ Waveform image kaydedilemedi:" << query.lastError().text();
+    else
+        qDebug() << "✅ Waveform image kaydedildi!";
+}
+
+QVariantList MainWindow::getWaveformImages()
+{
+    QVariantList list;
+    if (!db.isOpen()) return list;
+
+    QSqlQuery query("SELECT * FROM waveform_images ORDER BY timestamp DESC");
+    while (query.next()) {
+        QVariantMap item;
+        item["id"] = query.value("id").toInt();
+        item["timestamp"] = query.value("timestamp").toString();
+        item["spo2"] = query.value("spo2").toString();
+        item["pulse"] = query.value("pulse").toString();
+        item["imageData"] = query.value("imageData").toString();
+        list.append(item);
+    }
+    return list;
 }
 
 // Manuel yeniden bağlanma fonksiyonu (QML'den çağırılabilir)

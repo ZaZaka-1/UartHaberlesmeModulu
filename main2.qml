@@ -171,7 +171,14 @@ Item {
                             font.family: "Consolas, monospace"; font.pointSize: 8; font.bold: true; color: "#ffffff"
                             horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                         }
-                        onClicked: startWaveformCapture()
+                        onClicked: {
+                            console.log("🟢 WAVEFORM EKLE butonuna basıldı");
+
+                            // Eğer yakalama yapılmıyorsa, yakalamayı başlat
+                            if (!isCapturingWaveform) {
+                                startWaveformCapture();
+                            }
+                        }
                     }
 
                     Column {
@@ -352,15 +359,6 @@ Item {
             // Tabloyu hemen güncelle
             loadDatabaseRecords()
         }
-    }
-
-    function startWaveformCapture() {
-        console.log("📸 5 saniyelik waveform yakalama başlatılıyor...")
-        isCapturingWaveform = true
-        waveformCaptureDuration = 0
-        valuesStarted = true
-        testDataTimer.start()
-        waveformCaptureTimer.start()
     }
 
     function stopWaveformCapture() {
