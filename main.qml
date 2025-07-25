@@ -27,11 +27,6 @@ ApplicationWindow {
     property string alertMessage: ""
     property color alertColor: "#ff7b72"
 
-    // Waveform database için özellikler
-    property var waveformDatabase: []
-    property var currentWaveformSession: []
-    property int maxDatabaseSize: 100 // Maksimum kaydedilecek session sayısı
-    property int sessionDuration: 10000 // 10 saniye (ms)
 
     function exportWaveformToPdf() {
         isExportingPdf = true
@@ -52,7 +47,7 @@ ApplicationWindow {
     Timer {
         id: imageExportTimer
         interval: 500
-        onTriggered: {S
+        onTriggered: {
             console.log("🟢 imageExportTimer triggered")
             var imageData = waveformCanvas.toDataURL("image/png")
             if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
@@ -93,37 +88,6 @@ ApplicationWindow {
         currentAgeGroup = mode
     }
 
-    function saveWaveformSession() {
-        if (currentWaveformSession.length > 0) {
-            // 📸 Waveform imajını canvas'tan al (Base64)
-            var imageBase64 = waveformCanvas.toDataURL("image/png").split(',')[1]
-
-            var sessionData = {
-                timestamp: new Date().toISOString(),
-                duration: sessionDuration,
-                spo2: spo2Value,
-                pulse: pulseValue,
-                ageGroup: currentAgeGroup,
-                waveformData: currentWaveformSession.slice(),
-                isNormalRange: isInNormalRange,
-                imageData: imageBase64 //
-            }
-
-            waveformDatabase.push(sessionData)
-            console.log("Waveform session kaydedildi:", sessionData.timestamp)
-
-            if (waveformDatabase.length > maxDatabaseSize) {
-                waveformDatabase.shift()
-            }
-
-            currentWaveformSession = []
-        }
-    }
-
-    function getWaveformDatabase() {
-        return waveformDatabase
-    }
-
     onSpo2NumericChanged: checkAlert()
     onCurrentAgeGroupChanged: updateNormalRanges()
     Component.onCompleted: updateNormalRanges()
@@ -152,15 +116,11 @@ ApplicationWindow {
     Connections {
         target: waveformCanvas
         function onImageExported() {
-                var imageData = waveformCanvas.toDataURL("image/png");
-                console.log("Image data length:", imageData.length);
-                if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
-                    pageLoader.item.setCurrentWaveformImage(imageData);
-                }
-                // Ana sayfaya geçişi burada yap
-                root.isActive = false;
-                root.showMain2 = true;
+            var imageData = waveformCanvas.toDataURL("image/png");
+            if (pageLoader.item && pageLoader.item.setCurrentWaveformImage) {
+                pageLoader.item.setCurrentWaveformImage(imageData);
             }
+        }
     }
 
     Timer {
@@ -191,26 +151,28 @@ ApplicationWindow {
 
     Timer {
         id: autoWaveformImageTimer
-        interval: 5000 // Her 5 saniyede bir çalışır
+        interval: 5000 // Her 5 saniyede bir
         repeat: true
-        running: root.isActive && root.showMain2 // sadece main2 açıkken çalışsın
-
+        running: root.isActive && root.showMain2 // Sadece main2 açıkken çalışsın
         onTriggered: {
-            console.log("🔄 Otomatik waveform image oluşturuluyor...")
-            generateCurrentWaveformImage()
+            console.log("🔄 Otomatik waveform image oluşturuluyor...");
+            generateCurrentWaveformImage();
         }
     }
 
     Timer {
         id: autoSaveWaveformTimer
-        interval: 5000
-        repeat: true
+        interval: 5000 // 5 saniyede bir
         running: root.isActive
-
+        repeat: true
         onTriggered: {
-            var imageBase64 = waveformCanvas.toDataURL("image/png").split(',')[1]
-            if (mainWindow && mainWindow.insertWaveformImage)
-                mainWindow.insertWaveformImage(spo2Value, pulseValue, imageBase64)
+            // Canvas'dan görseli al (başlıksız Base64)
+            var imageData = waveformCanvas.toDataURL("image/png").split(',')[1];
+
+            // Ölçüm + Görseli tek seferde kaydet
+            if (mainWindow && mainWindow.insertMeasurementWithImage) {
+                mainWindow.insertMeasurementWithImage(spo2Value, pulseValue, imageData);
+            }
         }
     }
 
@@ -561,43 +523,45 @@ ApplicationWindow {
                             width: parent.width
                             height: parent.height - 38
                             property var waveformData: []
-                            property int maxPoints: 500
+                            property int maxPoints: 300
                             property bool isReceivingData: false
                             property double lastDataTime: 0
                             property bool isTestMode: false
                             property bool isExportingImage: false  // Yeni property ekleyin
                                 signal imageExported()  // Yeni signal ekleyin
 
+                            renderTarget: Canvas.FramebufferObject // Donanım hızlandırma için
+                                renderStrategy: Canvas.Threaded // Çizimi arka plan thread'ine al
 
                             // DEBUG için sayacı ekleyelim
                             property int dataCount: 0
 
-                            function addWaveformData(value) {
-                                console.log("addWaveformData called with value:", value)
-                                dataCount++
+                                function addWaveformData(value) {
+                                    if (!root.isActive) return; // Aktif değilse ekleme
 
-                                var normalizedValue = Math.max(0, Math.min(1, value / 255.0))
-                                waveformData.push(normalizedValue)
+                                    var normalizedValue = Math.max(0, Math.min(1, value / 255.0));
 
-                                console.log("Data added:", normalizedValue, "Total points:", waveformData.length)
+                                    // Sadece önemli değişikliklerde çiz
+                                    if (waveformData.length > 0 &&
+                                        Math.abs(normalizedValue - waveformData[waveformData.length-1]) < 0.01) {
+                                        return;
+                                    }
 
-                                // Current session'a da ekle
-                                root.currentWaveformSession.push({
-                                    timestamp: Date.now(),
-                                    value: normalizedValue,
-                                    spo2: root.spo2Value,
-                                    pulse: root.pulseValue
-                                })
+                                    waveformData.push(normalizedValue);
+                                    if (waveformData.length > maxPoints) waveformData.shift();
 
-                                if (waveformData.length > maxPoints) waveformData.shift()
+                                    // 10ms'den kısa aralıklarla repaint isteği gönderme
+                                    if (!repaintTimer.running) {
+                                        requestPaint();
+                                        repaintTimer.start();
+                                    }
+                                }
 
-                                // Veri alma durumunu güncelle
-                                isReceivingData = true
-                                lastDataTime = Date.now()
-
-                                console.log("Requesting repaint...")
-                                requestPaint()
-                            }
+                                Timer {
+                                    id: repaintTimer
+                                    interval: 16 // ~60 FPS (1000/60)
+                                    repeat: false
+                                }
 
                             onPaint: {
                                 console.log("onPaint called, data points:", waveformData.length)
@@ -630,6 +594,17 @@ ApplicationWindow {
                                 if (waveformData.length > 1) {
                                     console.log("Drawing waveform with", waveformData.length, "points")
 
+                                    // Grid çizgileri
+                                    ctx.strokeStyle = "#30363d"
+                                    ctx.lineWidth = 0.5
+                                    for (var y = 0; y <= height; y += height/4) {
+                                        ctx.beginPath()
+                                        ctx.moveTo(0, y)
+                                        ctx.lineTo(width, y)
+                                        ctx.stroke()
+                                    }
+
+                                    // Ana waveform çizgisi
                                     ctx.strokeStyle = "#00ff00"
                                     ctx.lineWidth = 2
                                     ctx.beginPath()
@@ -649,16 +624,23 @@ ApplicationWindow {
                                     }
 
                                     ctx.stroke()
+
+                                    // Eğer export işlemi yapılıyorsa, daha kalın ve net bir çizgi
+                                    if (isExportingImage) {
+                                        ctx.strokeStyle = "#00ff00"
+                                        ctx.lineWidth = 3
+                                        ctx.stroke()
+                                    }
                                 } else {
                                     console.log("Not enough data to draw, points:", waveformData.length)
                                 }
 
                                 // Veri alma durumu
                                 if (isExportingImage) {
-                                    isExportingImage = false;
-                                        console.log("Emitting imageExported signal");
-                                        imageExported(); // Bu sinyali tetikleyin
-                                    }
+                                    isExportingImage = false
+                                    console.log("Emitting imageExported signal")
+                                    imageExported() // Bu sinyali tetikleyin
+                                }
                             }
 
                             Connections {

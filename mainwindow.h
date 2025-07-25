@@ -111,6 +111,11 @@ public:
     Q_INVOKABLE void startWaveformSession();
     Q_INVOKABLE void stopWaveformSession();
 
+
+public slots:
+    void insertMeasurementWithImage(const QString &spo2, const QString &pulse, const QString &imageData = "");
+
+
 signals:
     void testModeChanged();
 

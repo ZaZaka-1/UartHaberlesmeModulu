@@ -63,6 +63,14 @@ MainWindow::MainWindow(QObject *parent)
 
     m_testTimer = new QTimer(this);
     connect(m_testTimer, &QTimer::timeout, this, &MainWindow::generateTestData);
+
+    if (db.isOpen()) {
+        QSqlQuery query;
+        QString alterTable = "ALTER TABLE measurements ADD COLUMN imageData TEXT";
+        if (!query.exec(alterTable)) {
+            qWarning() << "Tablo güncellenemedi:" << query.lastError().text();
+        }
+    }
 }
 
 void MainWindow::handleWaveformData(uint8_t waveformValue)
@@ -141,70 +149,17 @@ void MainWindow::handleSpo2PulseData(const QString &spo2, const QString &pulse)
     }
 }
 
-void MainWindow::handleErtData(uint8_t hr, uint8_t rr, float t1, float t2)
-{
-    // ERT verilerini işle (şu an sadece log)
-    Q_UNUSED(hr)
-    Q_UNUSED(rr)
-    Q_UNUSED(t1)
-    Q_UNUSED(t2)
-}
-
-void MainWindow::initDatabase()
-{
-    db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(QDir::homePath() + "/Desktop/sqlite_data/measurement_data.db");
-
-    if (!db.open()) {
-        qWarning() << "Veritabanı açılamadı:" << db.lastError().text();
-        return;
-    }
-
-    QSqlQuery query;
-
-    QString createWaveformImageTable =
-        "CREATE TABLE IF NOT EXISTS waveform_images ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "timestamp TEXT, "
-        "spo2 TEXT, "
-        "pulse TEXT, "
-        "imageData TEXT)";
-    query.exec(createWaveformImageTable);
-
-    QString createTable =
-        "CREATE TABLE IF NOT EXISTS measurements ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "timestamp TEXT, "
-        "spo2 TEXT, "
-        "pulse TEXT)";
-
-    if (!query.exec(createTable)) {
-        qWarning() << "Tablo oluşturulamadı:" << query.lastError().text();
-    } else {
-        qDebug() << "Veritabanı ve tablo hazır.";
-    }
-}
-
-// OPSIYONEL: Veri yazma sıklığını kontrol etmek isterseniz
 void MainWindow::insertMeasurement(const QString &spo2, const QString &pulse)
 {
-    if (!db.isOpen()) {
-        qDebug() << "❌ Veritabanı kapalı - veri yazılamadı";
+    if (!db.isOpen() || m_isTestMode) {
+        qDebug() << "❌ Veritabanı kapalı veya test modu aktif";
         return;
     }
 
-    // DÜZELTME 1: Test modu kontrolü ekle (güvenlik için)
-    if (m_isTestMode) {
-        qDebug() << "❌ Test modu aktif - veritabanına yazılmadı";
-        return;
-    }
-
-    // DÜZELTME 2: Spam kontrolünü daha esnek hale getir
     static QDateTime lastWriteTime;
     static QString lastSpo2, lastPulse;
     QDateTime currentTime = QDateTime::currentDateTime();
 
-    // Eğer değerler değiştiyse veya 5 saniye geçtiyse yaz
     bool dataChanged = (spo2 != lastSpo2 || pulse != lastPulse);
     bool timeElapsed = !lastWriteTime.isValid() || lastWriteTime.secsTo(currentTime) >= 5;
 
@@ -213,7 +168,6 @@ void MainWindow::insertMeasurement(const QString &spo2, const QString &pulse)
         return;
     }
 
-    // Son değerleri güncelle
     lastWriteTime = currentTime;
     lastSpo2 = spo2;
     lastPulse = pulse;
@@ -234,6 +188,72 @@ void MainWindow::insertMeasurement(const QString &spo2, const QString &pulse)
         emit measurementAdded();
     }
 }
+
+void MainWindow::handleErtData(uint8_t hr, uint8_t rr, float t1, float t2)
+{
+    // ERT verilerini işle (şu an sadece log)
+    Q_UNUSED(hr)
+    Q_UNUSED(rr)
+    Q_UNUSED(t1)
+    Q_UNUSED(t2)
+}
+
+void MainWindow::initDatabase() {
+    db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName(QDir::homePath() + "/Desktop/sqlite_data/measurement_data.db");
+
+    if (!db.open()) {
+        qWarning() << "Veritabanı açılamadı:" << db.lastError().text();
+        return;
+    }
+
+    QSqlQuery query;
+
+    // Eski tablo varsa güncelle
+    QString alterTable = "ALTER TABLE measurements ADD COLUMN imageData TEXT";
+    query.exec(alterTable); // Hata olsa bile devam et
+
+    QString createTable =
+        "CREATE TABLE IF NOT EXISTS measurements ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "timestamp TEXT, "
+        "spo2 TEXT, "
+        "pulse TEXT, "
+        "imageData TEXT)";
+
+    if (!query.exec(createTable)) {
+        qWarning() << "Tablo oluşturulamadı:" << query.lastError().text();
+    } else {
+        qDebug() << "Veritabanı ve tablo hazır.";
+    }
+}
+
+// OPSIYONEL: Veri yazma sıklığını kontrol etmek isterseniz
+// Bu fonksiyon zaten doğru şekilde implemente edilmiş, sadece kontrol edelim:
+void MainWindow::insertMeasurementWithImage(const QString &spo2, const QString &pulse, const QString &imageData) {
+    if (!db.isOpen() || m_isTestMode) {
+        qDebug() << "❌ Veritabanı kapalı veya test modu aktif";
+        return;
+    }
+
+    QSqlQuery query;
+    query.prepare("INSERT INTO measurements (timestamp, spo2, pulse, imageData) "
+                  "VALUES (:timestamp, :spo2, :pulse, :imageData)");
+
+    query.bindValue(":timestamp", QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
+    query.bindValue(":spo2", spo2);
+    query.bindValue(":pulse", pulse);
+    query.bindValue(":imageData", imageData);
+
+    if (!query.exec()) {
+        qWarning() << "❌ Ölçüm+görsel kaydedilemedi:" << query.lastError().text();
+    } else {
+        qDebug() << "✅ Ölçüm+görsel kaydedildi - SpO2:" << spo2 << "Pulse:" << pulse;
+        emit measurementAdded();
+    }
+}
+
+// getMeasurements fonksiyonu da doğru şekilde implemente edilmiş
 
 void MainWindow::insertWaveformImage(const QString &spo2, const QString &pulse, const QString &imageData)
 {
@@ -328,7 +348,7 @@ QVariantList MainWindow::getMeasurements()
         return measurements;
     }
     QSqlQuery query;
-    query.prepare("SELECT id, timestamp, spo2, pulse FROM measurements ORDER BY timestamp DESC");
+    query.prepare("SELECT id, timestamp, spo2, pulse, imageData FROM measurements ORDER BY timestamp DESC");
     if (!query.exec()) {
         qWarning() << "Ölçümler alınamadı:" << query.lastError().text();
         return measurements;
@@ -339,6 +359,7 @@ QVariantList MainWindow::getMeasurements()
         measurement["timestamp"] = query.value("timestamp").toString();
         measurement["spo2"] = query.value("spo2").toString();
         measurement["pulse"] = query.value("pulse").toString();
+        measurement["imageData"] = query.value("imageData").toString(); // Bu satırı ekleyin
         measurements.append(measurement);
     }
     return measurements;
