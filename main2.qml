@@ -58,7 +58,7 @@ Item {
     function loadDatabaseRecords() {
         try {
             var measurements = mainWindow.getMeasurements()
-            console.log("✅ Veritabanından", measurements.length, "kayıt yüklendi")
+            console.log("✅ Veritabanından", measurements.length, "kayıt yüklendi (imageData dahil)")
             listModel.clear()
 
             for (var i = 0; i < measurements.length; i++) {
@@ -66,13 +66,17 @@ Item {
                 var spo2Val = parseFloat(record.spo2)
                 var pulseVal = parseFloat(record.pulse)
 
+                // Debug için imageData kontrolü
+                var hasImage = record.imageData && record.imageData !== ""
+                console.log("Kayıt", i, "- ImageData var mı?", hasImage)
+
                 listModel.append({
                     index: i,
                     dbId: record.id,
                     timestamp: new Date(record.timestamp).getTime(),
                     spo2: spo2Val,
                     pulse: pulseVal,
-                    imageData: record.imageData || "",
+                    imageData: record.imageData || "", // Bu satırı düzeltiyoruz
                     isNormalRange: spo2Val >= 95 && pulseVal >= 60 && pulseVal <= 100
                 })
             }
@@ -352,12 +356,17 @@ Item {
                                         border.width: 1
 
                                         Image {
-                                            anchors.fill: parent
-                                            anchors.margins: 3
-                                            source: model.imageData ? "data:image/png;base64," + model.imageData : ""
-                                            fillMode: Image.PreserveAspectFit
-                                            visible: model.imageData !== ""
-                                        }
+                                                    anchors.fill: parent
+                                                    anchors.margins: 3
+                                                    source: model.imageData ? "data:image/png;base64," + model.imageData : ""
+                                                    fillMode: Image.PreserveAspectFit
+                                                    visible: model.imageData !== ""
+                                                    onStatusChanged: {
+                                                        if (status === Image.Error) {
+                                                            console.log("❌ Görsel yüklenemedi:", source)
+                                                        }
+                                                    }
+                                                }
 
                                         Text {
                                             anchors.centerIn: parent

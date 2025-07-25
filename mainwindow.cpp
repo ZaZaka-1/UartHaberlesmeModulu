@@ -68,7 +68,7 @@ MainWindow::MainWindow(QObject *parent)
         QSqlQuery query;
         QString alterTable = "ALTER TABLE measurements ADD COLUMN imageData TEXT";
         if (!query.exec(alterTable)) {
-            qWarning() << "Tablo güncellenemedi:" << query.lastError().text();
+            qDebug() << "imageData sütunu zaten var veya oluşturulamadı:" << query.lastError().text();
         }
     }
 }
@@ -359,7 +359,7 @@ QVariantList MainWindow::getMeasurements()
         measurement["timestamp"] = query.value("timestamp").toString();
         measurement["spo2"] = query.value("spo2").toString();
         measurement["pulse"] = query.value("pulse").toString();
-        measurement["imageData"] = query.value("imageData").toString(); // Bu satırı ekleyin
+        measurement["imageData"] = query.value("imageData").toString(); // Bu satır kritik
         measurements.append(measurement);
     }
     return measurements;

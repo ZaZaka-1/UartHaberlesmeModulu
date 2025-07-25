@@ -523,45 +523,105 @@ ApplicationWindow {
                             width: parent.width
                             height: parent.height - 38
                             property var waveformData: []
-                            property int maxPoints: 300
+                            property int maxPoints: 450
                             property bool isReceivingData: false
                             property double lastDataTime: 0
                             property bool isTestMode: false
-                            property bool isExportingImage: false  // Yeni property ekleyin
-                                signal imageExported()  // Yeni signal ekleyin
+                            property bool isExportingImage: false
+                            signal imageExported()
 
-                            renderTarget: Canvas.FramebufferObject // Donanım hızlandırma için
-                                renderStrategy: Canvas.Threaded // Çizimi arka plan thread'ine al
+                            // SPO2 dalga formu için ek özellikler
+                            property double baselineOffset: 0.2  // Baseline seviyesi
+                            property double amplitudeScale: 0.6  // Dalga genliği
+                            property double noiseLevel: 0.01     // Gürültü seviyesi
+                            property double wavePhase: 0         // Dalga fazı
+                            property var smoothingBuffer: []     // Yumuşatma tamponu
+                            property int smoothingWindow: 5      // Yumuşatma penceresi
 
-                            // DEBUG için sayacı ekleyelim
+                            renderTarget: Canvas.FramebufferObject
+                            renderStrategy: Canvas.Threaded
+
+                            // DEBUG için sayacı
                             property int dataCount: 0
 
-                                function addWaveformData(value) {
-                                    if (!root.isActive) return; // Aktif değilse ekleme
+                            function addWaveformData(value) {
+                                if (!root.isActive) return; // Aktif değilse ekleme
 
-                                    var normalizedValue = Math.max(0, Math.min(1, value / 255.0));
+                                var normalizedValue;
 
-                                    // Sadece önemli değişikliklerde çiz
-                                    if (waveformData.length > 0 &&
-                                        Math.abs(normalizedValue - waveformData[waveformData.length-1]) < 0.01) {
-                                        return;
-                                    }
-
-                                    waveformData.push(normalizedValue);
-                                    if (waveformData.length > maxPoints) waveformData.shift();
-
-                                    // 10ms'den kısa aralıklarla repaint isteği gönderme
-                                    if (!repaintTimer.running) {
-                                        requestPaint();
-                                        repaintTimer.start();
-                                    }
+                                if (isTestMode) {
+                                    // Test modunda gerçekçi SPO2 dalga formu oluştur
+                                    normalizedValue = generateRealisticSPO2Wave();
+                                } else {
+                                    // Gerçek veriden gelen değeri işle
+                                    var rawValue = Math.max(0, Math.min(255, value)) / 255.0;
+                                    normalizedValue = processRealSPO2Data(rawValue);
                                 }
 
-                                Timer {
-                                    id: repaintTimer
-                                    interval: 16 // ~60 FPS (1000/60)
-                                    repeat: false
+                                // Veri geçmişini güncelle
+                                waveformData.push(normalizedValue);
+                                if (waveformData.length > maxPoints) waveformData.shift();
+
+                                // Veri alındığını işaretle
+                                isReceivingData = true;
+                                lastDataTime = Date.now();
+                                dataCount++;
+
+                                // Çizim optimizasyonu
+                                if (!repaintTimer.running) {
+                                    requestPaint();
+                                    repaintTimer.start();
                                 }
+                            }
+
+                            function generateRealisticSPO2Wave() {
+                                var heartRate = parseInt(root.pulseValue) || 72;
+                                var beatsPerSecond = heartRate / 60.0;
+
+                                wavePhase += (2 * Math.PI * beatsPerSecond) / 30;
+                                if (wavePhase > 2 * Math.PI) wavePhase -= 2 * Math.PI;
+
+                                // SPO2 karakteristik dalga formu
+                                var systolic = Math.sin(wavePhase) * Math.exp(-Math.pow((wavePhase - Math.PI/2) / (Math.PI/3), 2));
+                                var diastolic = Math.sin(wavePhase * 1.5 + Math.PI/3) * 0.2;
+                                var dichrotic = wavePhase > Math.PI && wavePhase < 1.5 * Math.PI ?
+                                               Math.sin((wavePhase - Math.PI) * 4) * 0.15 : 0;
+
+                                var wave = systolic + diastolic + dichrotic;
+
+                                // Fizyolojik varyasyon
+                                var variation = Math.sin(wavePhase * 0.1) * 0.05;
+                                var breathing = Math.sin(wavePhase * 0.05) * 0.03; // Solunum etkisi
+
+                                return Math.max(0, Math.min(1, baselineOffset + (wave + variation + breathing) * amplitudeScale));
+                            }
+
+                            function processRealSPO2Data(rawValue) {
+                                // Smoothing buffer'ı güncelle
+                                smoothingBuffer.push(rawValue);
+                                if (smoothingBuffer.length > smoothingWindow) {
+                                    smoothingBuffer.shift();
+                                }
+
+                                // Hareketli ortalama ile yumuşatma
+                                var smoothed = smoothingBuffer.reduce(function(sum, val) { return sum + val; }, 0) / smoothingBuffer.length;
+
+                                // AC bileşenini vurgula (nabız sinyali)
+                                var dcOffset = 0.5; // Ortalama seviye
+                                var acComponent = (smoothed - dcOffset) * 2; // AC bileşenini güçlendir
+
+                                // Gürültü filtrele ve normalize et
+                                var processed = dcOffset + acComponent;
+                                processed += (Math.random() - 0.5) * noiseLevel; // Minimal gürültü
+
+                                return Math.max(0, Math.min(1, baselineOffset + processed * amplitudeScale));
+                            }
+
+                            Timer {
+                                id: repaintTimer
+                                interval: 16 // ~60 FPS (1000/60)
+                                repeat: false
+                            }
 
                             onPaint: {
                                 console.log("onPaint called, data points:", waveformData.length)
@@ -605,29 +665,46 @@ ApplicationWindow {
                                     }
 
                                     // Ana waveform çizgisi
-                                    ctx.strokeStyle = "#00ff00"
+                                    ctx.strokeStyle = "#00ff88"
                                     ctx.lineWidth = 2
+                                    ctx.shadowColor = "#00ff88"
+                                    ctx.shadowBlur = 3
                                     ctx.beginPath()
 
                                     var stepX = width / (maxPoints - 1)
                                     var startIndex = Math.max(0, waveformData.length - maxPoints)
 
-                                    for (var i = 0; i < waveformData.length; i++) {
-                                        var x = i * stepX
-                                        var y = height - (waveformData[startIndex + i] * height)
+                                    // Spline interpolasyon için kontrol noktalarını hesapla
+                                    for (var i = 0; i < waveformData.length - 1; i++) {
+                                        var x1 = i * stepX
+                                        var y1 = height - (waveformData[startIndex + i] * height)
+                                        var x2 = (i + 1) * stepX
+                                        var y2 = height - (waveformData[startIndex + i + 1] * height)
 
                                         if (i === 0) {
-                                            ctx.moveTo(x, y)
-                                        } else {
-                                            ctx.lineTo(x, y)
+                                            ctx.moveTo(x1, y1)
                                         }
+
+                                        // Yumuşak geçiş için bezier curve kullan
+                                        var cpx = x1 + (x2 - x1) * 0.5
+                                        var cpy1 = y1
+                                        var cpy2 = y2
+
+                                        ctx.quadraticCurveTo(cpx, cpy1, x2, y2)
                                     }
 
                                     ctx.stroke()
 
+                                    // Glow efekti için ikinci çizim
+                                    ctx.strokeStyle = "#00ff4488"
+                                    ctx.lineWidth = 4
+                                    ctx.stroke()
+
+                                    ctx.shadowBlur = 0 // Shadow'u sıfırla
+
                                     // Eğer export işlemi yapılıyorsa, daha kalın ve net bir çizgi
                                     if (isExportingImage) {
-                                        ctx.strokeStyle = "#00ff00"
+                                        ctx.strokeStyle = "#00ff88"
                                         ctx.lineWidth = 3
                                         ctx.stroke()
                                     }
