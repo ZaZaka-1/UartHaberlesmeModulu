@@ -192,3 +192,9 @@ Projeyi Qt Creator ile açtıktan sonra CMake ile derleyip çalıştırabilirsin
 Her türlü geri bildirim ve katkı için iletişime geçebilirsiniz.
 
 📧 E-posta: ardaauckun2005@gmail.com
+
+<img width="926" height="902" alt="Proje_AnaSayfa" src="https://github.com/user-attachments/assets/94c13f3a-c2f8-41f0-be9b-fbb2ae7177ca" />
+
+<img width="924" height="902" alt="Proje_VeriTablosu" src="https://github.com/user-attachments/assets/bbaa475c-bf6a-433d-a4b6-5624f36b6bba" />
+
+<img width="917" height="1004" alt="Proje_Ayarlar" src="https://github.com/user-attachments/assets/564ba342-b858-49fc-baa3-3fa3e5cae49d" />
