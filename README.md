@@ -1,7 +1,8 @@
 # 📊 SpO2 ve Nabız İzleme Sistemi 
 **Qt/QML Tabanlı Gerçek Zamanlı Hasta Monitörü**
 
-![Proje Arayüz Örneği](https://via.placeholder.com/800x400?text=SpO2+Monitoring+UI) *(Örnek ekran görüntüsü)*
+![Proje Arayüz Örneği](<img width="907" height="903" alt="Ekran görüntüsü 2025-07-28 120408" src="https://github.com/user-attachments/assets/7bf44379-702a-41a6-9a7a-541a45972629" />
+) *(Örnek ekran görüntüsü)*
 
 ## 📌 Proje Özeti
 UART üzerinden SpO2 ve nabız verilerini okuyan, SQLite'da saklayan ve PDF raporu üretebilen çapraz platform masaüstü uygulaması.
