@@ -2,6 +2,9 @@
 
 Proje Dokümantasyonu
 
+
+<img width="855" height="786" alt="Ekran görüntüsü 2025-07-11 151131" src="https://github.com/user-attachments/assets/22618bee-303f-408f-a047-662fd1f3b865" />
+
 Hazırlayan: Arda Hüseyin Uçkun
 Tarih: 28.07.2025
 Versiyon: 1.0
