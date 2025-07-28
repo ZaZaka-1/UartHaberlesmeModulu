@@ -149,9 +149,6 @@ Ekler:
 Geliştirici	Arda Hüseyin Uçkun
 Versiyon	1.0 (28.07.2025)
 
-📬 Katkı & İletişim
-✉️ ardaauckun2005@gmail.com
-
 🚀 Kurulum Rehberi
 Gereksinimler
 Qt Creator 6.5+
