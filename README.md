@@ -28,6 +28,8 @@
 
 ---
 
+<img width="926" height="902" alt="Proje_AnaSayfa" src="https://github.com/user-attachments/assets/94c13f3a-c2f8-41f0-be9b-fbb2ae7177ca" />
+
 ## 📖 Giriş
 
 Bu proje, hasta sağlık verilerini (SpO2 ve nabız) gerçek zamanlı olarak izlemek, kaydetmek ve raporlamak amacıyla geliştirilmiştir. Modern bir grafiksel arayüz ile verileri hem görsel hem de yazılı olarak kullanıcıya sunar.
