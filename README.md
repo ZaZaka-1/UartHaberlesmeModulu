@@ -158,14 +158,6 @@ Qt Creator 6.5+
 CMake 3.25+
 Serial Port Driver (CP210x gerekebilir)
 
-Derleme Adımları
-bash
-git clone https://github.com/ZaZaka-1/UartHaberlesmeModulu_SaturasyonVeNabiz.git
-cd UartHaberlesmeModulu_SaturasyonVeNabiz
-mkdir build && cd build
-cmake -DCMAKE_PREFIX_PATH=/path/to/qt6 ..
-make -j4
-
 📬 Katkı & İletişim
 ✉️ ardaauckun2005@gmail.com
 
