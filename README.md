@@ -27,7 +27,8 @@
 11. [Katkı ve İletişim](#katkı-ve-iletişim)
 
 ---
-
+Dikkat!
+Fotoğraflarda görünen değerler test çıktısıdır.
 <img width="926" height="902" alt="Proje_AnaSayfa" src="https://github.com/user-attachments/assets/94c13f3a-c2f8-41f0-be9b-fbb2ae7177ca" />
 
 <img width="924" height="902" alt="Proje_VeriTablosu" src="https://github.com/user-attachments/assets/bbaa475c-bf6a-433d-a4b6-5624f36b6bba" />
